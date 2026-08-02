@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
     const file = formData.get('audio') as File | null;
-    const userApiKey = (formData.get('apiKey') as string) || process.env.GEMINI_API_KEY;
+    const userApiKey = (formData.get('apiKey') as string) || process.env.NEXT_PUBLIC_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
 
     if (!file) {
       return NextResponse.json({ ok: false, error: 'Nenhum arquivo de áudio enviado.' }, { status: 400 });

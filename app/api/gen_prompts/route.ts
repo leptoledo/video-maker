@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { srt, apiKey } = body;
-    const userApiKey = apiKey || process.env.GEMINI_API_KEY;
+    const userApiKey = apiKey || process.env.NEXT_PUBLIC_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
 
     if (!srt) {
       return NextResponse.json({ ok: false, error: 'Transcrição SRT ausente.' }, { status: 400 });

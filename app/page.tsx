@@ -79,7 +79,12 @@ export default function HomePage() {
 
   useEffect(() => {
     const savedKey = localStorage.getItem('lctnet_gemini_key');
-    if (savedKey) setApiKey(savedKey);
+    const envKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || '';
+    if (savedKey) {
+      setApiKey(savedKey);
+    } else if (envKey) {
+      setApiKey(envKey);
+    }
   }, []);
 
   const handleSaveKey = (val: string) => {
@@ -106,12 +111,14 @@ export default function HomePage() {
     setIsTranscribing(true);
     setTranscribeNote(null);
 
+    const activeKey = apiKey.trim() || process.env.NEXT_PUBLIC_GEMINI_API_KEY || '';
+
     // 1. Direct Browser Client-Side Execution (Bypasses Vercel 10s Serverless Timeout)
-    if (apiKey.trim()) {
+    if (activeKey) {
       try {
         const base64Audio = await fileToBase64(audioFile);
         const mimeType = audioFile.type || 'audio/mp3';
-        const genAI = new GoogleGenerativeAI(apiKey.trim());
+        const genAI = new GoogleGenerativeAI(activeKey);
 
         const candidateModels = [
           'gemini-1.5-flash',
@@ -285,11 +292,65 @@ Retorne estritamente um array JSON com a estrutura:
   const handleGenPromptsAI = async () => {
     if (!srtText) return;
     setIsGenPrompts(true);
+    const activeKey = apiKey.trim() || process.env.NEXT_PUBLIC_GEMINI_API_KEY || '';
+
+    if (activeKey) {
+      try {
+        const genAI = new GoogleGenerativeAI(activeKey);
+        const candidateModels = [
+          'gemini-1.5-pro',
+          'gemini-1.5-flash',
+          'gemini-2.0-flash-exp',
+          'gemini-1.0-pro',
+          'gemini-pro',
+        ];
+        const userPrompt = `You are an elite AI prompt engineer specialized in 3D cinematic photorealistic visual storytelling.
+Your task is to analyze the provided transcript with timestamps and generate paired Image and Video prompts IN ENGLISH for every scene/timestamp.
+
+Format per scene:
+[MM:SS] SCENE [X] — [Title]
+
+Image (Nano Banana 2): [Detailed 3D photorealistic image prompt in English... cinematic photorealism 4K, high dramatic contrast.]
+
+Video (Veo 3.1 Lite): [Camera movement, character action/breathing, lighting, sound description, X seconds.]
+
+Generate one image prompt per timestamp:
+
+${srtText}`;
+
+        let result = null;
+        let lastError = null;
+        for (const modelName of candidateModels) {
+          try {
+            const model = genAI.getGenerativeModel({ model: modelName });
+            result = await model.generateContent(userPrompt);
+            if (result) break;
+          } catch (err: any) {
+            lastError = err;
+          }
+        }
+
+        if (result) {
+          const prompts = result.response.text();
+          setIsGenPrompts(false);
+          setAiPrompts(prompts);
+          const blob = new Blob([prompts], { type: 'text/plain;charset=utf-8' });
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = 'prompts_gerados_gemini.txt';
+          a.click();
+          return;
+        }
+      } catch (err) {
+        console.warn('Client-side gen prompts fallback to route:', err);
+      }
+    }
+
     try {
       const res = await fetch('/api/gen_prompts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ srt: srtText, apiKey }),
+        body: JSON.stringify({ srt: srtText, apiKey: activeKey }),
       });
       const data = await res.json();
       setIsGenPrompts(false);
