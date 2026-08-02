@@ -3,18 +3,19 @@
 import React, { useState } from 'react';
 import { Heart, Copy, Check } from 'lucide-react';
 
-const PIX_CODE = "00020126580014BR.GOV.BCB.PIX01360d7c6d0d-599a-4d40-b896-6b8e1e07ec9e5204000053039865802BR5923Lctnet Machado de Bonfim6009SAO PAULO62140510v41WD6P5j76304D870";
+const REVOLUT_LINK = "https://revolut.me/leptoledo";
 
 export function SupportPix() {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(PIX_CODE);
+      await navigator.clipboard.writeText(REVOLUT_LINK);
       setCopied(true);
       setTimeout(() => setCopied(false), 3000);
+      window.open(REVOLUT_LINK, '_blank');
     } catch {
-      // fallback
+      window.open(REVOLUT_LINK, '_blank');
     }
   };
 
@@ -32,7 +33,7 @@ export function SupportPix() {
         <div className="w-32 h-32 bg-surface-el rounded-lg p-1.5 flex-shrink-0 shadow-[0_0_18px_rgba(0,255,136,0.18)] border border-border-strong overflow-hidden">
           <img
             src="/qr-code.jpg"
-            alt="QR Code Pix"
+            alt="QR Code Revolut"
             className="w-full h-full object-cover rounded-md"
           />
         </div>
@@ -41,21 +42,21 @@ export function SupportPix() {
             (@leptoledo)
           </div>
           <p className="text-xs text-text-muted leading-relaxed mb-3">
-            Esse programa é <strong className="text-white">100% grátis</strong>. Se ele te ajudou, contribua com qualquer valor via Pix pra manter o app e novas ferramentas no ar. 🙏
+            Esse programa é <strong className="text-white">100% grátis</strong>. Se ele te ajudou, contribua com qualquer valor para manter o app e novas ferramentas no ar. 🙏
           </p>
           <button
             onClick={handleCopy}
-            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold bg-green text-[#04220f] hover:brightness-110 transition-all shadow-[0_0_12px_rgba(0,255,136,0.3)]"
+            className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-lg text-xs font-bold bg-green text-[#04220f] hover:brightness-110 transition-all shadow-[0_0_12px_rgba(0,255,136,0.3)]"
           >
             {copied ? (
               <>
                 <Check className="w-4 h-4" />
-                <span>Chave Pix Copiada!</span>
+                <span>Link Copiado! Abrindo página...</span>
               </>
             ) : (
               <>
                 <Copy className="w-4 h-4" />
-                <span>Copiar chave Pix (copia e cola)</span>
+                <span>Copie o link e apoie o APP</span>
               </>
             )}
           </button>
