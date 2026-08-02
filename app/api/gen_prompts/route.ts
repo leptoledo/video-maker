@@ -27,12 +27,14 @@ RULES:
 
 async function getAvailableGeminiModels(apiKey: string): Promise<string[]> {
   const defaults = [
-    'gemini-1.5-pro',
-    'gemini-1.5-flash',
-    'gemini-2.0-flash-exp',
-    'gemini-1.0-pro',
-    'gemini-pro',
+    'gemini-flash-latest',
+    'gemini-2.5-flash-lite',
+    'gemini-flash-lite-latest',
+    'gemini-2.0-flash-lite',
+    'gemini-2.0-flash',
+    'gemini-pro-latest',
   ];
+  const obsolete = ['gemini-pro', 'gemini-1.0-pro', 'gemini-1.5-flash', 'gemini-1.5-pro'];
   try {
     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
     if (res.ok) {
@@ -40,10 +42,11 @@ async function getAvailableGeminiModels(apiKey: string): Promise<string[]> {
       if (Array.isArray(data.models)) {
         const fetched = data.models
           .filter((m: any) => m.supportedGenerationMethods?.includes('generateContent'))
-          .map((m: any) => m.name.replace(/^models\//, ''));
+          .map((m: any) => m.name.replace(/^models\//, ''))
+          .filter((name: string) => !obsolete.includes(name));
 
         if (fetched.length > 0) {
-          return Array.from(new Set([...fetched, ...defaults]));
+          return Array.from(new Set([...defaults, ...fetched]));
         }
       }
     }

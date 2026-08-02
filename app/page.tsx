@@ -121,12 +121,12 @@ export default function HomePage() {
         const genAI = new GoogleGenerativeAI(activeKey);
 
         const candidateModels = [
-          'gemini-1.5-flash',
-          'gemini-1.5-pro',
-          'gemini-2.0-flash-exp',
-          'gemini-1.5-flash-8b',
-          'gemini-1.0-pro',
-          'gemini-pro',
+          'gemini-flash-latest',
+          'gemini-2.5-flash-lite',
+          'gemini-flash-lite-latest',
+          'gemini-2.0-flash-lite',
+          'gemini-2.0-flash',
+          'gemini-pro-latest',
         ];
 
         const prompt = `Transcreva este áudio com precisão em Português e divida em segmentos curtos com timestamps (em segundos).
@@ -303,11 +303,12 @@ Retorne estritamente um array JSON com a estrutura:
       try {
         const genAI = new GoogleGenerativeAI(activeKey);
         const candidateModels = [
-          'gemini-1.5-pro',
-          'gemini-1.5-flash',
-          'gemini-2.0-flash-exp',
-          'gemini-1.0-pro',
-          'gemini-pro',
+          'gemini-flash-latest',
+          'gemini-2.5-flash-lite',
+          'gemini-flash-lite-latest',
+          'gemini-2.0-flash-lite',
+          'gemini-2.0-flash',
+          'gemini-pro-latest',
         ];
         const userPrompt = `You are an elite AI prompt engineer specialized in 3D cinematic photorealistic visual storytelling.
 Your task is to analyze the provided transcript with timestamps and generate paired Image and Video prompts IN ENGLISH for every scene/timestamp.
