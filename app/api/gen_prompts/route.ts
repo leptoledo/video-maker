@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-export const maxDuration = 60;
-
 const SYSTEM_PROMPT = `You are an elite AI prompt engineer specialized in 3D cinematic photorealistic visual storytelling.
 Your task is to analyze the provided transcript with timestamps and generate paired Image and Video prompts IN ENGLISH for every scene/timestamp.
 

@@ -68,15 +68,6 @@ export default function HomePage() {
 
   const handleTranscribe = async () => {
     if (!audioFile) return;
-
-    if (audioFile.size > 4.5 * 1024 * 1024) {
-      setTranscribeNote({
-        type: 'err',
-        msg: `⚠ O arquivo de áudio (${(audioFile.size / (1024 * 1024)).toFixed(1)}MB) excede o limite da Vercel (4.5MB). Por favor, comprima o arquivo em MP3 64-128kbps ou envie um áudio menor.`,
-      });
-      return;
-    }
-
     setIsTranscribing(true);
     setTranscribeNote(null);
 
@@ -89,24 +80,6 @@ export default function HomePage() {
         method: 'POST',
         body: formData,
       });
-
-      if (!res.ok) {
-        const rawText = await res.text();
-        let errorMsg = 'Erro no servidor durante a transcrição.';
-        try {
-          const parsed = JSON.parse(rawText);
-          errorMsg = parsed.error || errorMsg;
-        } catch {
-          if (res.status === 413) {
-            errorMsg = 'O arquivo de áudio excede o limite da Vercel (4.5MB). Por favor, comprima o áudio em MP3.';
-          } else {
-            errorMsg = `Erro no servidor (${res.status}): ${rawText.slice(0, 120)}`;
-          }
-        }
-        setIsTranscribing(false);
-        setTranscribeNote({ type: 'err', msg: `✗ ${errorMsg}` });
-        return;
-      }
 
       const data = await res.json();
       setIsTranscribing(false);
@@ -262,17 +235,15 @@ export default function HomePage() {
 
         {/* PASSO 1: ÁUDIO */}
         <div
-          className={`bg-surface border rounded-xl p-4 mb-4 transition-all ${
-            step1Done ? 'border-green/40' : 'border-accent/40 shadow-[0_0_16px_rgba(255,34,68,0.12)]'
-          }`}
+          className={`bg-surface border rounded-xl p-4 mb-4 transition-all ${step1Done ? 'border-green/40' : 'border-accent/40 shadow-[0_0_16px_rgba(255,34,68,0.12)]'
+            }`}
         >
           <div className="flex items-center gap-2 mb-3">
             <div
-              className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-extrabold border ${
-                step1Done
+              className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-extrabold border ${step1Done
                   ? 'bg-green border-green text-[#04220f]'
                   : 'bg-surface-el border-accent text-accent'
-              }`}
+                }`}
             >
               1
             </div>
@@ -332,13 +303,12 @@ export default function HomePage() {
 
           {transcribeNote && (
             <div
-              className={`text-xs mt-2 font-medium ${
-                transcribeNote.type === 'ok'
+              className={`text-xs mt-2 font-medium ${transcribeNote.type === 'ok'
                   ? 'text-green'
                   : transcribeNote.type === 'warn'
-                  ? 'text-orange'
-                  : 'text-accent'
-              }`}
+                    ? 'text-orange'
+                    : 'text-accent'
+                }`}
             >
               {transcribeNote.msg}
             </div>
@@ -347,21 +317,19 @@ export default function HomePage() {
 
         {/* PASSO 2: TRANSCRIÇÃO + PROMPTS */}
         <div
-          className={`bg-surface border rounded-xl p-4 mb-4 transition-all ${
-            !step1Done
+          className={`bg-surface border rounded-xl p-4 mb-4 transition-all ${!step1Done
               ? 'opacity-40 pointer-events-none'
               : step2Done
-              ? 'border-green/40'
-              : 'border-accent/40 shadow-[0_0_16px_rgba(255,34,68,0.12)]'
-          }`}
+                ? 'border-green/40'
+                : 'border-accent/40 shadow-[0_0_16px_rgba(255,34,68,0.12)]'
+            }`}
         >
           <div className="flex items-center gap-2 mb-3">
             <div
-              className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-extrabold border ${
-                step2Done
+              className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-extrabold border ${step2Done
                   ? 'bg-green border-green text-[#04220f]'
                   : 'bg-surface-el border-accent text-accent'
-              }`}
+                }`}
             >
               2
             </div>
@@ -425,21 +393,19 @@ export default function HomePage() {
 
         {/* PASSO 3: IMAGENS */}
         <div
-          className={`bg-surface border rounded-xl p-4 mb-4 transition-all ${
-            !step1Done
+          className={`bg-surface border rounded-xl p-4 mb-4 transition-all ${!step1Done
               ? 'opacity-40 pointer-events-none'
               : step3Done
-              ? 'border-green/40'
-              : 'border-accent/40 shadow-[0_0_16px_rgba(255,34,68,0.12)]'
-          }`}
+                ? 'border-green/40'
+                : 'border-accent/40 shadow-[0_0_16px_rgba(255,34,68,0.12)]'
+            }`}
         >
           <div className="flex items-center gap-2 mb-3">
             <div
-              className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-extrabold border ${
-                step3Done
+              className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-extrabold border ${step3Done
                   ? 'bg-green border-green text-[#04220f]'
                   : 'bg-surface-el border-accent text-accent'
-              }`}
+                }`}
             >
               3
             </div>
@@ -469,13 +435,12 @@ export default function HomePage() {
 
           {imageFolderNote && (
             <div
-              className={`text-xs mt-2 font-medium ${
-                imageFolderNote.type === 'ok'
+              className={`text-xs mt-2 font-medium ${imageFolderNote.type === 'ok'
                   ? 'text-green'
                   : imageFolderNote.type === 'warn'
-                  ? 'text-orange'
-                  : 'text-accent'
-              }`}
+                    ? 'text-orange'
+                    : 'text-accent'
+                }`}
             >
               {imageFolderNote.msg}
             </div>
@@ -484,21 +449,19 @@ export default function HomePage() {
 
         {/* PASSO 4: MONTAR E EXPORTAR CAPCUT ZIP */}
         <div
-          className={`bg-surface border rounded-xl p-4 mb-4 transition-all ${
-            !step3Done
+          className={`bg-surface border rounded-xl p-4 mb-4 transition-all ${!step3Done
               ? 'opacity-40 pointer-events-none'
               : step4Done
-              ? 'border-green/40'
-              : 'border-accent/40 shadow-[0_0_16px_rgba(255,34,68,0.12)]'
-          }`}
+                ? 'border-green/40'
+                : 'border-accent/40 shadow-[0_0_16px_rgba(255,34,68,0.12)]'
+            }`}
         >
           <div className="flex items-center gap-2 mb-3">
             <div
-              className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-extrabold border ${
-                step4Done
+              className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-extrabold border ${step4Done
                   ? 'bg-green border-green text-[#04220f]'
                   : 'bg-surface-el border-accent text-accent'
-              }`}
+                }`}
             >
               4
             </div>
@@ -529,13 +492,12 @@ export default function HomePage() {
 
           {assembleNote && (
             <div
-              className={`text-xs mt-3 font-medium ${
-                assembleNote.type === 'ok'
+              className={`text-xs mt-3 font-medium ${assembleNote.type === 'ok'
                   ? 'text-green'
                   : assembleNote.type === 'warn'
-                  ? 'text-orange'
-                  : 'text-accent'
-              }`}
+                    ? 'text-orange'
+                    : 'text-accent'
+                }`}
             >
               {assembleNote.msg}
             </div>
@@ -561,7 +523,7 @@ export default function HomePage() {
         <SupportPix />
 
         <div className="text-center mt-6 text-[10px] text-text-muted/40">
-          © 2025 lctnet.ia · @lctnetmachadoIA · Todos os direitos reservados
+          © 2025 lctnet.ia · @lctnet.ia · Todos os direitos reservados
         </div>
       </div>
     </div>

@@ -552,7 +552,7 @@ dialog input{ width:100%; margin:10px 0; padding:9px 11px; background:var(--surf
     </div>
   </div>
 
-  <div class="foot">© 2025 lctnet.ia · <a href="https://www.youtube.com/@lctnetmachadoIA" target="_blank">@lctnetmachadoIA</a> · Todos os direitos reservados</div>
+  <div class="foot">© 2025 lctnet.ia · <a href="https://www.youtube.com/@lctnetmachadoIA" target="_blank">@lctnet.ia</a> · Todos os direitos reservados</div>
 </div>
 
 <dialog id="apiDlg">
