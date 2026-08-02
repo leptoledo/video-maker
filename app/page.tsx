@@ -68,6 +68,15 @@ export default function HomePage() {
 
   const handleTranscribe = async () => {
     if (!audioFile) return;
+
+    if (audioFile.size > 4.5 * 1024 * 1024) {
+      setTranscribeNote({
+        type: 'err',
+        msg: `⚠ O arquivo de áudio (${(audioFile.size / (1024 * 1024)).toFixed(1)}MB) excede o limite da Vercel (4.5MB). Por favor, comprima o arquivo em MP3 64-128kbps ou envie um áudio menor.`,
+      });
+      return;
+    }
+
     setIsTranscribing(true);
     setTranscribeNote(null);
 
@@ -80,6 +89,24 @@ export default function HomePage() {
         method: 'POST',
         body: formData,
       });
+
+      if (!res.ok) {
+        const rawText = await res.text();
+        let errorMsg = 'Erro no servidor durante a transcrição.';
+        try {
+          const parsed = JSON.parse(rawText);
+          errorMsg = parsed.error || errorMsg;
+        } catch {
+          if (res.status === 413) {
+            errorMsg = 'O arquivo de áudio excede o limite da Vercel (4.5MB). Por favor, comprima o áudio em MP3.';
+          } else {
+            errorMsg = `Erro no servidor (${res.status}): ${rawText.slice(0, 120)}`;
+          }
+        }
+        setIsTranscribing(false);
+        setTranscribeNote({ type: 'err', msg: `✗ ${errorMsg}` });
+        return;
+      }
 
       const data = await res.json();
       setIsTranscribing(false);
