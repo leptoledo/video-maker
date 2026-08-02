@@ -534,7 +534,7 @@ export default function HomePage() {
         <SupportPix />
 
         <div className="text-center mt-6 text-[10px] text-text-muted/40">
-          © 2025 Lctnet Machado · @lctnetmachadoIA · Todos os direitos reservados
+          © 2025 lctnet.ia · @lctnetmachadoIA · Todos os direitos reservados
         </div>
       </div>
     </div>

@@ -38,7 +38,7 @@ export function SupportPix() {
         </div>
         <div className="flex-1 min-w-[200px]">
           <div className="text-xs font-bold text-green tracking-wide mb-1">
-            Pix · Lctnet Machado de Bonfim
+            Pix · lctnet.ia
           </div>
           <p className="text-xs text-text-muted leading-relaxed mb-3">
             Esse programa é <strong className="text-white">100% grátis</strong>. Se ele te ajudou, contribua com qualquer valor via Pix pra manter o canal e novas ferramentas no ar. 🙏

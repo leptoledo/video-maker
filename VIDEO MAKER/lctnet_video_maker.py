@@ -545,14 +545,14 @@ dialog input{ width:100%; margin:10px 0; padding:9px 11px; background:var(--surf
         </svg>
       </div>
       <div class="pix-info">
-        <div class="pix-name">Pix · Lctnet Machado de Bonfim</div>
+        <div class="pix-name">Pix · lctnet.ia</div>
         <p>Esse programa é <b>100% grátis</b>. Se ele te ajudou, contribua com qualquer valor via Pix pra manter o canal e novas ferramentas no ar. 🙏</p>
         <button class="btn btn-green" id="btnPix" onclick="copyPix()">📋 Copiar chave Pix (copia e cola)</button>
       </div>
     </div>
   </div>
 
-  <div class="foot">© 2025 Lctnet Machado · <a href="https://www.youtube.com/@lctnetmachadoIA" target="_blank">@lctnetmachadoIA</a> · Todos os direitos reservados</div>
+  <div class="foot">© 2025 lctnet.ia · <a href="https://www.youtube.com/@lctnetmachadoIA" target="_blank">@lctnetmachadoIA</a> · Todos os direitos reservados</div>
 </div>
 
 <dialog id="apiDlg">
