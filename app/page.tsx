@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import { HeroHeader } from '@/components/HeroHeader';
 import { SupportPix } from '@/components/SupportPix';
 import { generateCapCutZip, SceneImage } from '@/lib/capcut-zip';
@@ -17,6 +18,39 @@ import {
   Check,
   Loader2,
 } from 'lucide-react';
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      const base64 = result.split(',')[1] || result;
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+const PASTE_HEADER = `Você é um gerador de prompts de imagem e vídeo para produções cinematográficas em 3D.
+
+Vou colar abaixo uma transcrição com timestamps. Gere prompts pareados para CADA cena no seguinte formato:
+
+[MM:SS] SCENE [Número] — [Título da Cena]
+
+Image (Nano Banana 2): [Prompt detalhado em inglês: 3D cinematic photorealism 4K, detalhes consistentes dos personagens, vestimentas, expressão facial, ângulo de câmera e iluminação dramática, finalizando com: cinematic photorealism 4K, high dramatic contrast.]
+
+Video (Veo 3.1 Lite): [Prompt de vídeo em inglês: movimento de câmera (ex: fixed shot with handheld tremor), movimentação e respiração dos personagens, efeitos ambientais, som/ambiente e duração em segundos.]
+
+REGRAS:
+• Todos os prompts em inglês.
+• Manter o estilo consistente (3D cinematic photorealism 4K).
+• Manter a mesma descrição física dos personagens ao longo de todas as cenas.
+
+═══════════════════════════════════════════
+TRANSCRIÇÃO COM TIMESTAMPS:
+═══════════════════════════════════════════
+`;
 
 export default function HomePage() {
   // Step 1 State
@@ -69,16 +103,112 @@ export default function HomePage() {
   const handleTranscribe = async () => {
     if (!audioFile) return;
 
+    setIsTranscribing(true);
+    setTranscribeNote(null);
+
+    // 1. Direct Browser Client-Side Execution (Bypasses Vercel 10s Serverless Timeout)
+    if (apiKey.trim()) {
+      try {
+        const base64Audio = await fileToBase64(audioFile);
+        const mimeType = audioFile.type || 'audio/mp3';
+        const genAI = new GoogleGenerativeAI(apiKey.trim());
+
+        const candidateModels = [
+          'gemini-1.5-flash',
+          'gemini-1.5-pro',
+          'gemini-2.0-flash-exp',
+          'gemini-1.5-flash-8b',
+          'gemini-1.0-pro',
+          'gemini-pro',
+        ];
+
+        const prompt = `Transcreva este áudio com precisão em Português e divida em segmentos curtos com timestamps (em segundos).
+Retorne estritamente um array JSON com a estrutura:
+[
+  { "start": number_in_seconds, "text": "Texto transcrito..." }
+]`;
+
+        const audioPart = {
+          inlineData: {
+            data: base64Audio,
+            mimeType: mimeType.includes('audio') ? mimeType : 'audio/mp3',
+          },
+        };
+
+        let result = null;
+        let lastError = null;
+
+        for (const modelName of candidateModels) {
+          try {
+            const model = genAI.getGenerativeModel({
+              model: modelName,
+              generationConfig: { responseMimeType: 'application/json' },
+            });
+            result = await model.generateContent([audioPart, prompt]);
+            if (result) break;
+          } catch (err) {
+            try {
+              const model = genAI.getGenerativeModel({ model: modelName });
+              result = await model.generateContent([audioPart, prompt]);
+              if (result) break;
+            } catch (retryErr: any) {
+              lastError = retryErr;
+            }
+          }
+        }
+
+        if (!result) {
+          throw lastError || new Error('Não foi possível conectar com os modelos do Gemini.');
+        }
+
+        const responseText = result.response.text();
+        let rawSegments: Array<{ start: number; text: string }> = [];
+        try {
+          rawSegments = JSON.parse(responseText);
+        } catch {
+          const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+          if (jsonMatch) rawSegments = JSON.parse(jsonMatch[0]);
+        }
+
+        const parsedSegments = rawSegments
+          .map((s) => ({
+            start: Number(s.start) || 0,
+            text: (s.text || '').trim(),
+          }))
+          .filter((s) => s.text);
+
+        const srtLines = parsedSegments.map((s) => {
+          const minutes = Math.floor(s.start / 60);
+          const seconds = Math.floor(s.start % 60);
+          const mm = String(minutes).padStart(2, '0');
+          const ss = String(seconds).padStart(2, '0');
+          return `[${mm}:${ss}] ${s.text}`;
+        });
+
+        setIsTranscribing(false);
+        setSegments(parsedSegments);
+        setSrtText(srtLines.join('\n'));
+        setPasteText(PASTE_HEADER + '\n' + srtLines.join('\n'));
+        setTranscribeNote({
+          type: 'ok',
+          msg: `✓ ${parsedSegments.length} segmentos transcritos diretamente no navegador com sucesso!`,
+        });
+        return;
+      } catch (err: any) {
+        console.error('Client-side Gemini Error:', err);
+        // Fallback to server route if client side fails
+      }
+    }
+
+    // 2. Server Route Fallback (via Vercel Serverless Function)
     if (audioFile.size > 4.5 * 1024 * 1024) {
+      setIsTranscribing(false);
       setTranscribeNote({
         type: 'err',
-        msg: `⚠ O arquivo de áudio (${(audioFile.size / (1024 * 1024)).toFixed(1)}MB) excede o limite da Vercel (4.5MB). Por favor, converta para MP3 mono 24k/64k ou envie um áudio menor.`,
+        msg: `⚠ O arquivo de áudio (${(audioFile.size / (1024 * 1024)).toFixed(1)}MB) excede o limite da Vercel (4.5MB). Cole sua Chave Gemini no campo acima para transcrever diretamente no navegador sem limites!`,
       });
       return;
     }
-
-    setIsTranscribing(true);
-    setTranscribeNote(null);
 
     try {
       const formData = new FormData();
@@ -97,8 +227,10 @@ export default function HomePage() {
           const parsed = JSON.parse(rawText);
           errorMsg = parsed.error || errorMsg;
         } catch {
-          if (res.status === 413) {
-            errorMsg = 'O arquivo de áudio excede o limite da Vercel (4.5MB). Por favor, comprima o áudio em MP3 mono 24-64kbps.';
+          if (res.status === 504) {
+            errorMsg = 'O tempo de resposta excedeu o limite de 10s da Vercel. Informe sua Chave Gemini API no campo acima para transcrever áudios longos diretamente no seu navegador sem limitações!';
+          } else if (res.status === 413) {
+            errorMsg = 'O arquivo de áudio excede o limite da Vercel (4.5MB). Cole sua Chave Gemini no campo acima para processar diretamente no navegador.';
           } else {
             errorMsg = `Erro no servidor (${res.status}): ${rawText.slice(0, 150)}`;
           }
