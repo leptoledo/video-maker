@@ -203,7 +203,12 @@ Retorne estritamente um array JSON com a estrutura:
         return;
       } catch (err: any) {
         console.error('Client-side Gemini Error:', err);
-        // Fallback to server route if client side fails
+        setIsTranscribing(false);
+        setTranscribeNote({
+          type: 'err',
+          msg: `✗ Erro na Chave Gemini API: ${err.message || 'Verifique se a chave informada é uma chave válida do Google AI Studio (inicia em AIzaSy...)'}`,
+        });
+        return;
       }
     }
 
