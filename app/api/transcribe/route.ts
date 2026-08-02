@@ -3,12 +3,6 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export const maxDuration = 60;
 
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
-
 const PASTE_INSTRUCTIONS_HEADER = `Você é um gerador de prompts de imagem e vídeo para produções cinematográficas em 3D.
 
 Vou colar abaixo uma transcrição com timestamps. Gere prompts pareados para CADA cena no seguinte formato:
