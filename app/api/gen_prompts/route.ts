@@ -25,6 +25,34 @@ RULES:
 3. Every scene MUST contain both 'Image (Nano Banana 2):' and 'Video (Veo 3.1 Lite):'.
 4. Character visual details must remain locked and consistent from scene 1 to the end.`;
 
+async function getAvailableGeminiModels(apiKey: string): Promise<string[]> {
+  const defaults = [
+    'gemini-1.5-pro',
+    'gemini-1.5-flash',
+    'gemini-2.0-flash-exp',
+    'gemini-1.0-pro',
+    'gemini-pro',
+  ];
+  try {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data.models)) {
+        const fetched = data.models
+          .filter((m: any) => m.supportedGenerationMethods?.includes('generateContent'))
+          .map((m: any) => m.name.replace(/^models\//, ''));
+
+        if (fetched.length > 0) {
+          return Array.from(new Set([...fetched, ...defaults]));
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[Gemini API] Dynamic models list fetch failed:', err);
+  }
+  return defaults;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -43,14 +71,7 @@ export async function POST(req: NextRequest) {
     }
 
     const genAI = new GoogleGenerativeAI(userApiKey);
-    const candidateModels = [
-      'gemini-2.5-pro',
-      'gemini-1.5-pro',
-      'gemini-2.5-flash',
-      'gemini-2.0-flash',
-      'gemini-1.5-flash-latest',
-      'gemini-1.5-flash',
-    ];
+    const candidateModels = await getAvailableGeminiModels(userApiKey);
 
     const userPrompt = `${SYSTEM_PROMPT}\n\nGenerate one image prompt per timestamp:\n\n${srt}`;
 

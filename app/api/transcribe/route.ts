@@ -29,6 +29,40 @@ TRANSCRIÇÃO COM TIMESTAMPS:
 ═══════════════════════════════════════════
 `;
 
+async function getAvailableGeminiModels(apiKey: string): Promise<string[]> {
+  const defaults = [
+    'gemini-1.5-flash',
+    'gemini-1.5-pro',
+    'gemini-2.0-flash-exp',
+    'gemini-1.5-flash-8b',
+    'gemini-1.0-pro',
+    'gemini-pro',
+  ];
+  try {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data.models)) {
+        const fetched = data.models
+          .filter((m: any) => m.supportedGenerationMethods?.includes('generateContent'))
+          .map((m: any) => m.name.replace(/^models\//, ''));
+
+        if (fetched.length > 0) {
+          fetched.sort((a: string, b: string) => {
+            if (a.includes('flash') && !b.includes('flash')) return -1;
+            if (!a.includes('flash') && b.includes('flash')) return 1;
+            return 0;
+          });
+          return Array.from(new Set([...fetched, ...defaults]));
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[Gemini API] Dynamic models list fetch failed:', err);
+  }
+  return defaults;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
@@ -51,15 +85,7 @@ export async function POST(req: NextRequest) {
     const mimeType = file.type || 'audio/mp3';
 
     const genAI = new GoogleGenerativeAI(userApiKey);
-    const candidateModels = [
-      'gemini-2.5-flash',
-      'gemini-2.0-flash',
-      'gemini-1.5-flash-latest',
-      'gemini-1.5-flash',
-      'gemini-1.5-flash-001',
-      'gemini-2.5-pro',
-      'gemini-1.5-pro',
-    ];
+    const candidateModels = await getAvailableGeminiModels(userApiKey);
 
     const prompt = `Transcreva este áudio com precisão em Português e divida em segmentos curtos com timestamps (em segundos).
 Retorne estritamente um array JSON com a estrutura:
@@ -86,13 +112,19 @@ Retorne estritamente um array JSON com a estrutura:
         result = await model.generateContent([audioPart, prompt]);
         if (result) break;
       } catch (err: any) {
-        lastError = err;
-        console.warn(`[Gemini Transcribe] Model ${modelName} unavailable, trying fallback...`, err?.message);
+        try {
+          const model = genAI.getGenerativeModel({ model: modelName });
+          result = await model.generateContent([audioPart, prompt]);
+          if (result) break;
+        } catch (retryErr: any) {
+          lastError = retryErr;
+          console.warn(`[Gemini Transcribe] Model ${modelName} failed:`, retryErr?.message);
+        }
       }
     }
 
     if (!result) {
-      throw lastError || new Error('Nenhum modelo compatível do Gemini está disponível para esta chave de API.');
+      throw lastError || new Error('Nenhum modelo disponível para esta chave do Gemini.');
     }
 
     const responseText = result.response.text();
@@ -101,7 +133,6 @@ Retorne estritamente um array JSON com a estrutura:
     try {
       rawSegments = JSON.parse(responseText);
     } catch {
-      // Fallback parser if markdown codeblock wrapped
       const jsonMatch = responseText.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
         rawSegments = JSON.parse(jsonMatch[0]);
