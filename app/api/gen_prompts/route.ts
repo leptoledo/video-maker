@@ -1,0 +1,61 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+
+const SYSTEM_PROMPT = `You are an elite AI prompt engineer specialized in 3D cinematic photorealistic visual storytelling.
+Your task is to analyze the provided transcript with timestamps and generate paired Image and Video prompts IN ENGLISH for every scene/timestamp.
+
+MASTER STYLE & CONSISTENCY RULES:
+• Visual Style: 3D cinematic photorealism 4K, realistic lighting, cinematic depth of field, high dramatic contrast.
+• Character Consistency: Create a master character design anchor for all key characters (age, physical build, skin tone, hair, beard, clothing/armor) and maintain these EXACT details consistently across all scene prompts where the characters appear.
+• All generated prompts MUST be 100% in English.
+
+EXACT OUTPUT FORMAT FOR EACH SCENE:
+
+[MM:SS] SCENE [Number] — [Brief Scene Title]
+
+Image (Nano Banana 2): [Detailed 3D photorealistic image prompt describing character appearance, facial expression, posture, clothing, background elements, lighting contrast, ending with 'cinematic photorealism 4K, high dramatic contrast.']
+
+Video (Veo 3.1 Lite): [Camera motion details (e.g., fixed shot with handheld tremor, slow tracking zoom), character dynamic actions and breathing, environmental elements motion, sound effect/ambient audio description, duration (e.g. 5-8 seconds).]
+
+(Separate scenes with a blank line).
+
+RULES:
+1. Keep chronological order corresponding to the [MM:SS] timestamps.
+2. Do not skip any timestamp.
+3. Every scene MUST contain both 'Image (Nano Banana 2):' and 'Video (Veo 3.1 Lite):'.
+4. Character visual details must remain locked and consistent from scene 1 to the end.`;
+
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json();
+    const { srt, apiKey } = body;
+    const userApiKey = apiKey || process.env.GEMINI_API_KEY;
+
+    if (!srt) {
+      return NextResponse.json({ ok: false, error: 'Transcrição SRT ausente.' }, { status: 400 });
+    }
+
+    if (!userApiKey) {
+      return NextResponse.json(
+        { ok: false, error: 'Chave de API do Gemini Pro não fornecida.' },
+        { status: 400 }
+      );
+    }
+
+    const genAI = new GoogleGenerativeAI(userApiKey);
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
+
+    const userPrompt = `${SYSTEM_PROMPT}\n\nGenerate one image prompt per timestamp:\n\n${srt}`;
+
+    const result = await model.generateContent(userPrompt);
+    const prompts = result.response.text();
+
+    return NextResponse.json({ ok: true, prompts });
+  } catch (error: any) {
+    console.error('Gemini Prompt Generation Error:', error);
+    return NextResponse.json(
+      { ok: false, error: error.message || 'Erro ao gerar prompts com Gemini Pro.' },
+      { status: 500 }
+    );
+  }
+}

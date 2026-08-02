@@ -1,0 +1,93 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@property --glow-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+:root {
+  --bg: #07070f;
+  --bg-deep: #040408;
+  --surface: #0f0f1a;
+  --surface-el: #14141f;
+  --text: #e2e2f0;
+  --text-muted: rgba(200, 200, 230, 0.5);
+  --border-strong: rgba(255, 255, 255, 0.10);
+  --green: #00ff88;
+  --cyan: #00bbff;
+  --orange: #ff8800;
+  --amber: #ffaa00;
+  --accent: #ff2244;
+  --radius: 12px;
+  --radius-sm: 8px;
+}
+
+body {
+  color: var(--text);
+  background: var(--bg);
+  background-image: 
+    radial-gradient(ellipse at 50% 0%, rgba(255, 34, 68, 0.12) 0%, transparent 60%),
+    linear-gradient(180deg, var(--bg-deep) 0%, var(--bg) 100%);
+  min-height: 100vh;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 1000;
+  background: linear-gradient(90deg, var(--green), var(--cyan), var(--accent), var(--orange), var(--green));
+  background-size: 300% 100%;
+  animation: shimmer-bar 3s linear infinite;
+}
+
+@keyframes shimmer-bar {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+@keyframes vibgyor-spin {
+  0% { --glow-angle: 0deg; }
+  100% { --glow-angle: 360deg; }
+}
+
+.glow {
+  position: relative;
+}
+
+.glow.on::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: calc(var(--radius) + 2px);
+  background: conic-gradient(from var(--glow-angle), #ff0000, #ff8800, #ffee00, #00ff44, #00bbff, #4455ff, #9900ff, #ff0000);
+  animation: vibgyor-spin 1.8s linear infinite;
+  z-index: 0;
+}
+
+.glow.on > * {
+  position: relative;
+  z-index: 2;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--surface);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 34, 68, 0.4);
+}

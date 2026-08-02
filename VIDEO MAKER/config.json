@@ -1,0 +1,15 @@
+{
+    "transcricao": {
+        "modelo_whisper": "small",
+        "idioma": "pt"
+    },
+    "video": {
+        "largura": 1920,
+        "altura": 1080,
+        "fps": 30
+    },
+    "capcut": {
+        "pasta_drafts": "",
+        "nome_projeto": "LctnetVideo"
+    }
+}
