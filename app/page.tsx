@@ -413,8 +413,13 @@ Retorne estritamente um array JSON com a estrutura:
 
           {/* Gemini Key Input */}
           <div className="mb-3">
-            <label className="text-[11px] text-text-muted flex items-center gap-1.5 mb-1 font-semibold">
-              <Key className="w-3.5 h-3.5 text-amber" /> Chave Gemini API (Google Gemini Pro):
+            <label className="text-[11px] text-text-muted flex items-center justify-between mb-1 font-semibold">
+              <span className="flex items-center gap-1.5">
+                <Key className="w-3.5 h-3.5 text-amber" /> Chave Gemini API (Google Gemini Pro):
+              </span>
+              <span className="text-[10px] text-green font-normal">
+                {apiKey ? '✓ Salva no navegador' : '⚡ Recomendado para áudios longos'}
+              </span>
             </label>
             <input
               type="password"
@@ -423,6 +428,9 @@ Retorne estritamente um array JSON com a estrutura:
               placeholder="Cole sua AI_KEY_... (ou defina no ambiente)"
               className="w-full px-3 py-2 text-xs font-mono bg-surface-el border border-border-strong rounded-lg text-text focus:outline-none focus:border-accent"
             />
+            <div className="text-[10px] text-text-muted/70 mt-1">
+              💡 Cole sua chave 1 vez. Ela fica salva no seu navegador para transcrever áudios longos sem limite de tempo!
+            </div>
           </div>
 
           <div className="flex items-center gap-3 flex-wrap">
