@@ -51,10 +51,15 @@ export async function POST(req: NextRequest) {
     const mimeType = file.type || 'audio/mp3';
 
     const genAI = new GoogleGenerativeAI(userApiKey);
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash',
-      generationConfig: { responseMimeType: 'application/json' },
-    });
+    const candidateModels = [
+      'gemini-2.5-flash',
+      'gemini-2.0-flash',
+      'gemini-1.5-flash-latest',
+      'gemini-1.5-flash',
+      'gemini-1.5-flash-001',
+      'gemini-2.5-pro',
+      'gemini-1.5-pro',
+    ];
 
     const prompt = `Transcreva este áudio com precisão em Português e divida em segmentos curtos com timestamps (em segundos).
 Retorne estritamente um array JSON com a estrutura:
@@ -69,7 +74,27 @@ Retorne estritamente um array JSON com a estrutura:
       },
     };
 
-    const result = await model.generateContent([audioPart, prompt]);
+    let result = null;
+    let lastError = null;
+
+    for (const modelName of candidateModels) {
+      try {
+        const model = genAI.getGenerativeModel({
+          model: modelName,
+          generationConfig: { responseMimeType: 'application/json' },
+        });
+        result = await model.generateContent([audioPart, prompt]);
+        if (result) break;
+      } catch (err: any) {
+        lastError = err;
+        console.warn(`[Gemini Transcribe] Model ${modelName} unavailable, trying fallback...`, err?.message);
+      }
+    }
+
+    if (!result) {
+      throw lastError || new Error('Nenhum modelo compatível do Gemini está disponível para esta chave de API.');
+    }
+
     const responseText = result.response.text();
 
     let rawSegments: Array<{ start: number; text: string }> = [];

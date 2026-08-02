@@ -43,11 +43,35 @@ export async function POST(req: NextRequest) {
     }
 
     const genAI = new GoogleGenerativeAI(userApiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
+    const candidateModels = [
+      'gemini-2.5-pro',
+      'gemini-1.5-pro',
+      'gemini-2.5-flash',
+      'gemini-2.0-flash',
+      'gemini-1.5-flash-latest',
+      'gemini-1.5-flash',
+    ];
 
     const userPrompt = `${SYSTEM_PROMPT}\n\nGenerate one image prompt per timestamp:\n\n${srt}`;
 
-    const result = await model.generateContent(userPrompt);
+    let result = null;
+    let lastError = null;
+
+    for (const modelName of candidateModels) {
+      try {
+        const model = genAI.getGenerativeModel({ model: modelName });
+        result = await model.generateContent(userPrompt);
+        if (result) break;
+      } catch (err: any) {
+        lastError = err;
+        console.warn(`[Gemini GenPrompts] Model ${modelName} unavailable, trying fallback...`, err?.message);
+      }
+    }
+
+    if (!result) {
+      throw lastError || new Error('Nenhum modelo compatível do Gemini está disponível para esta chave de API.');
+    }
+
     const prompts = result.response.text();
 
     return NextResponse.json({ ok: true, prompts });
