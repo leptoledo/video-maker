@@ -17,6 +17,8 @@ import {
   Key,
   Check,
   Loader2,
+  Trash2,
+  RotateCcw,
 } from 'lucide-react';
 
 function fileToBase64(file: File): Promise<string> {
@@ -77,6 +79,26 @@ export default function HomePage() {
   const [assembleNote, setAssembleNote] = useState<{ type: 'ok' | 'err' | 'warn'; msg: string } | null>(null);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
 
+  const [restoredAudioName, setRestoredAudioName] = useState<string>('');
+
+  const parseSrtTextToSegments = (text: string): Array<{ start: number; text: string }> => {
+    const lines = text.split('\n');
+    const result: Array<{ start: number; text: string }> = [];
+    const pat = /\[(\d{1,2}):(\d{2})\]\s*(.*)/;
+    lines.forEach((line) => {
+      const m = pat.exec(line);
+      if (m) {
+        const mins = parseInt(m[1], 10);
+        const secs = parseInt(m[2], 10);
+        const content = m[3].trim();
+        if (content) {
+          result.push({ start: mins * 60 + secs, text: content });
+        }
+      }
+    });
+    return result;
+  };
+
   useEffect(() => {
     const savedKey = localStorage.getItem('lctnet_gemini_key');
     const envKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || '';
@@ -85,11 +107,73 @@ export default function HomePage() {
     } else if (envKey) {
       setApiKey(envKey);
     }
+
+    // Restore saved transcription session if available
+    try {
+      const savedSession = localStorage.getItem('lctnet_saved_session');
+      if (savedSession) {
+        const data = JSON.parse(savedSession);
+        if (data.srtText && data.srtText.trim()) {
+          setSrtText(data.srtText);
+          const parsedSegs = parseSrtTextToSegments(data.srtText);
+          setSegments(parsedSegs.length ? parsedSegs : data.segments || []);
+          setPasteText(data.pasteText || (PASTE_HEADER + '\n' + data.srtText));
+          if (data.aiPrompts) setAiPrompts(data.aiPrompts);
+          if (data.audioDuration) setAudioDuration(data.audioDuration);
+          if (data.audioFileName) setRestoredAudioName(data.audioFileName);
+
+          setTranscribeNote({
+            type: 'ok',
+            msg: `✓ Transcrição recuperada do navegador! (${data.audioFileName || 'Sessão salva'})`,
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('Erro ao restaurar sessão salva:', e);
+    }
   }, []);
+
+  // Auto-save session to localStorage whenever transcription or prompts change
+  useEffect(() => {
+    if (srtText && srtText.trim()) {
+      try {
+        const sessionData = {
+          segments,
+          srtText,
+          pasteText,
+          aiPrompts,
+          audioFileName: audioFile?.name || restoredAudioName || '',
+          audioDuration,
+          savedAt: new Date().toISOString(),
+        };
+        localStorage.setItem('lctnet_saved_session', JSON.stringify(sessionData));
+      } catch (e) {
+        console.warn('Erro ao salvar sessão no localStorage:', e);
+      }
+    }
+  }, [srtText, segments, pasteText, aiPrompts, audioFile, restoredAudioName, audioDuration]);
 
   const handleSaveKey = (val: string) => {
     setApiKey(val);
     localStorage.setItem('lctnet_gemini_key', val);
+  };
+
+  const handleClearSession = () => {
+    if (window.confirm('Deseja realmente limpar a transcrição salva e iniciar um novo projeto?')) {
+      localStorage.removeItem('lctnet_saved_session');
+      setAudioFile(null);
+      setAudioDuration(0);
+      setRestoredAudioName('');
+      setSegments([]);
+      setSrtText('');
+      setPasteText('');
+      setAiPrompts('');
+      setImageFiles([]);
+      setDownloadUrl(null);
+      setTranscribeNote(null);
+      setImageFolderNote(null);
+      setAssembleNote(null);
+    }
   };
 
   const handleAudioSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -501,12 +585,13 @@ ${srtText}`;
   };
 
   const handleAssembleCapCut = async () => {
-    if (!audioFile || imageFiles.length === 0) return;
+    if (imageFiles.length === 0) return;
     setIsAssembling(true);
     setAssembleNote(null);
 
     try {
-      const projectName = `LctnetVideo_${audioFile.name.replace(/\.[^/.]+$/, '').slice(0, 16)}`;
+      const rawName = audioFile?.name || restoredAudioName || 'LctnetVideo';
+      const projectName = `LctnetVideo_${rawName.replace(/\.[^/.]+$/, '').slice(0, 16)}`;
       const zipBlob = await generateCapCutZip(
         projectName,
         audioFile,
@@ -518,9 +603,13 @@ ${srtText}`;
       setDownloadUrl(url);
       setIsAssembling(false);
 
+      const audioNotice = audioFile
+        ? ''
+        : ' (Para incluir o arquivo .mp3 dentro do .ZIP, basta selecionar o áudio no Passo 1)';
+
       setAssembleNote({
         type: 'ok',
-        msg: `✓ ${imageFiles.length} cenas montadas! Arquivo .ZIP do CapCut gerado.`,
+        msg: `✓ ${imageFiles.length} mídias montadas! Arquivo .ZIP do CapCut gerado.${audioNotice}`,
       });
 
       // Trigger automatic download
@@ -537,10 +626,19 @@ ${srtText}`;
     }
   };
 
-  const step1Done = !!segments.length;
-  const step2Done = !!segments.length;
+  const step1Done = !!audioFile || !!segments.length || !!srtText.trim();
+  const step2Done = !!segments.length || !!srtText.trim();
   const step3Done = imageFiles.length > 0;
   const step4Done = !!downloadUrl;
+
+  const handleSrtTextChange = (val: string) => {
+    setSrtText(val);
+    setPasteText(PASTE_HEADER + '\n' + val);
+    const parsedSegs = parseSrtTextToSegments(val);
+    if (parsedSegs.length > 0) {
+      setSegments(parsedSegs);
+    }
+  };
 
   return (
     <div className="min-h-screen flex justify-center py-6 px-4">
@@ -590,11 +688,11 @@ ${srtText}`;
 
           <div className="flex items-center gap-3 flex-wrap">
             <span className="flex-1 min-w-0 text-xs text-text-muted truncate">
-              {audioFile ? audioFile.name : 'Nenhum arquivo selecionado'}
+              {audioFile ? audioFile.name : restoredAudioName ? `Sessão Salva (${restoredAudioName})` : 'Nenhum arquivo selecionado'}
             </span>
             <label className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg font-bold text-xs bg-surface-el border border-border-strong text-text cursor-pointer hover:-translate-y-0.5 transition-all">
               <FileAudio className="w-4 h-4 text-accent" />
-              <span>Selecionar áudio</span>
+              <span>{audioFile ? 'Alterar áudio' : 'Selecionar áudio'}</span>
               <input
                 type="file"
                 accept="audio/*"
@@ -658,13 +756,23 @@ ${srtText}`;
             <div className="text-xs font-extrabold tracking-wider uppercase text-text">
               Transcrição + Prompts
             </div>
+            {srtText && (
+              <button
+                onClick={handleClearSession}
+                title="Limpar transcrição salva e iniciar novo projeto"
+                className="ml-auto text-[11px] font-bold text-accent/80 hover:text-accent flex items-center gap-1 px-2.5 py-1 bg-accent/10 border border-accent/30 rounded-md transition-all hover:bg-accent/20"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Nova Transcrição</span>
+              </button>
+            )}
           </div>
 
           <textarea
-            readOnly
             value={srtText}
+            onChange={(e) => handleSrtTextChange(e.target.value)}
             placeholder="A transcrição com timestamps aparece aqui..."
-            className="w-full h-36 p-3 text-xs font-mono bg-surface-el border border-border-strong rounded-lg text-text resize-y focus:outline-none"
+            className="w-full h-36 p-3 text-xs font-mono bg-surface-el border border-border-strong rounded-lg text-text resize-y focus:outline-none focus:border-accent"
           />
 
           <div className="flex items-center gap-2 flex-wrap mt-3">

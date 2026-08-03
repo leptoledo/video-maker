@@ -25,7 +25,7 @@ function toUS(seconds: number): number {
 
 export async function generateCapCutZip(
   projectName: string,
-  audioFile: File,
+  audioFile: File | null,
   audioDurationSec: number,
   images: SceneImage[],
   aspectRatio: { width: number; height: number } = { width: 1920, height: 1080 }
@@ -36,12 +36,14 @@ export async function generateCapCutZip(
   if (!projectFolder) throw new Error('Could not create project folder in zip');
 
   const draftId = newUUID();
-  const audioDurationUS = toUS(audioDurationSec);
+  const audioDurationUS = toUS(audioDurationSec || 60);
   const nowUS = Date.now() * 1000;
 
-  // Add audio file to zip inside project folder
-  const audioFileName = audioFile.name;
-  projectFolder.file(audioFileName, audioFile);
+  // Add audio file to zip inside project folder if present
+  const audioFileName = audioFile ? audioFile.name : 'audio.mp3';
+  if (audioFile) {
+    projectFolder.file(audioFileName, audioFile);
+  }
 
   // Group images by timestamp
   const sortedImages = [...images].sort((a, b) => a.timestamp - b.timestamp);
