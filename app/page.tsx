@@ -19,6 +19,8 @@ import {
   Loader2,
   Trash2,
   RotateCcw,
+  Music,
+  Volume2,
 } from 'lucide-react';
 
 function fileToBase64(file: File): Promise<string> {
@@ -378,6 +380,34 @@ Retorne estritamente um array JSON com a estrutura:
     a.click();
   };
 
+  const [isMusicCopied, setIsMusicCopied] = useState<boolean>(false);
+  const [isAllPromptsCopied, setIsAllPromptsCopied] = useState<boolean>(false);
+
+  const handleCopyMusicPrompts = async () => {
+    if (!aiPrompts) return;
+    const musicSectionMatch = aiPrompts.match(/MASTER MUSIC PROMPT[\s\S]*?(?=\n\n\[|\n\[)/i);
+    const musicSection = musicSectionMatch ? musicSectionMatch[0] : '';
+    const sceneAudioLines = aiPrompts
+      .split('\n')
+      .filter((line) => line.startsWith('Audio & Music') || line.startsWith('Music (Google Flow') || line.includes('GOOGLE FLOW MUSIC'))
+      .join('\n');
+
+    const fullMusicText = musicSection
+      ? `${musicSection}\n\n==================================================\n🔊 SCENE AUDIO & SFX PROMPTS\n==================================================\n${sceneAudioLines}`
+      : aiPrompts;
+
+    await navigator.clipboard.writeText(fullMusicText);
+    setIsMusicCopied(true);
+    setTimeout(() => setIsMusicCopied(false), 2500);
+  };
+
+  const handleCopyAllPrompts = async () => {
+    if (!aiPrompts) return;
+    await navigator.clipboard.writeText(aiPrompts);
+    setIsAllPromptsCopied(true);
+    setTimeout(() => setIsAllPromptsCopied(false), 2500);
+  };
+
   const handleGenPromptsAI = async () => {
     if (!srtText) return;
     setIsGenPrompts(true);
@@ -394,17 +424,35 @@ Retorne estritamente um array JSON com a estrutura:
           'gemini-2.0-flash',
           'gemini-pro-latest',
         ];
-        const userPrompt = `You are an elite AI prompt engineer specialized in 3D cinematic photorealistic visual storytelling.
-Your task is to analyze the provided transcript with timestamps and generate paired Image and Video prompts IN ENGLISH for every scene/timestamp.
+        const userPrompt = `You are an elite AI prompt engineer specialized in 3D cinematic photorealistic visual storytelling AND audio/music score composition for AI generators (Google Flow Music, Lyria 3, Veo).
 
-Format per scene:
-[MM:SS] SCENE [X] — [Title]
+Your task is to analyze the provided transcript with timestamps and generate:
+1. A MASTER BACKGROUND MUSIC PROMPT (for Google Flow Music / Lyria 3) tailored to the overall theme, mood, and genre of the story.
+2. Paired Image (Nano Banana 2), Video (Veo 3.1 Lite), and Audio/Music (Google Flow Music) prompts IN ENGLISH for every scene/timestamp.
 
-Image (Nano Banana 2): [Detailed 3D photorealistic image prompt in English... cinematic photorealism 4K, high dramatic contrast.]
+EXACT OUTPUT FORMAT:
 
-Video (Veo 3.1 Lite): [Camera movement, character action/breathing, lighting, sound description, X seconds.]
+==================================================
+🎵 MASTER MUSIC PROMPT (GOOGLE FLOW MUSIC / LYRIA)
+==================================================
+Theme & Mood: [Theme summary and emotional arc]
+Genre & Style: [e.g., Cinematic Orchestral / Dark Epic Ambient / Lo-Fi Beats / Emotional Strings]
+Instrumentation: [e.g., Grand Piano, Cello, Heavy Drums, Ambient Synth Pads, Brass]
+Tempo & Key: [e.g., 75 BPM, slow build-up to dramatic crescendo]
+Google Flow Music Prompt: [Complete copy-pasteable prompt for Google Flow Music describing the full music track, mood, instruments, rhythm, and atmosphere...]
+==================================================
 
-Generate one image prompt per timestamp:
+[MM:SS] SCENE [Number] — [Brief Scene Title]
+
+Image (Nano Banana 2): [Detailed 3D photorealistic image prompt describing character appearance, facial expression, posture, clothing, background elements, lighting contrast, ending with 'cinematic photorealism 4K, high dramatic contrast.']
+
+Video (Veo 3.1 Lite): [Camera motion details, character dynamic actions and breathing, environmental elements motion, sound effect/ambient audio description, duration (5-8 seconds).]
+
+Audio & Music (Google Flow Music): [Specific musical section mood, tempo change, sound effects, foley, atmospheric audio for this scene/timestamp...]
+
+(Separate scenes with a blank line).
+
+Transcript:
 
 ${srtText}`;
 
@@ -816,9 +864,64 @@ ${srtText}`;
               <span>✨ Gerar Prompts via Gemini Pro</span>
             </button>
           </div>
+
           <div className="text-[11px] text-text-muted/70 mt-2">
-            💡 Dica: Prompts gerados no estilo <strong className="text-white">3D cinematic photorealism 4K</strong> com entradas pareadas para <strong className="text-white">Image (Nano Banana 2)</strong> e <strong className="text-white">Video (Veo 3.1 Lite)</strong> em inglês.
+            💡 Dica: Prompts gerados para <strong className="text-white">Image (Nano Banana 2)</strong>, <strong className="text-white">Video (Veo 3.1 Lite)</strong> e <strong className="text-white">Music & Sons (Google Flow Music / Lyria 3)</strong>.
           </div>
+
+          {/* PROMPTS GERADOS PELA IA (IMAGEM + VÍDEO + MÚSICA GOOGLE FLOW) */}
+          {aiPrompts && (
+            <div className="mt-4 pt-4 border-t border-border-strong/60">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <div className="text-xs font-bold text-orange flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-orange" />
+                  <span>Prompts Gerados (Visual + Google Flow Music & SFX)</span>
+                </div>
+              </div>
+
+              <textarea
+                readOnly
+                value={aiPrompts}
+                className="w-full h-48 p-3 text-xs font-mono bg-[#0b0c10] border border-orange/30 rounded-lg text-text-muted resize-y focus:outline-none focus:border-orange"
+              />
+
+              <div className="flex items-center gap-2 flex-wrap mt-2.5">
+                <button
+                  onClick={handleCopyAllPrompts}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold text-xs bg-orange/20 border border-orange/40 text-orange hover:-translate-y-0.5 transition-all"
+                >
+                  {isAllPromptsCopied ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-green" />
+                      <span>✓ Todos Prompts Copiados!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>📋 Copiar Todos os Prompts</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  onClick={handleCopyMusicPrompts}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold text-xs bg-cyan/15 border border-cyan/40 text-cyan hover:-translate-y-0.5 transition-all"
+                >
+                  {isMusicCopied ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-green" />
+                      <span>✓ Prompts de Música Copiados!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Music className="w-3.5 h-3.5 text-cyan" />
+                      <span>🎵 Copiar Música & Sons (Google Flow)</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* PASSO 3: IMAGENS */}
