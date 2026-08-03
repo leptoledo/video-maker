@@ -376,38 +376,79 @@ ${srtText}`;
     }
   };
 
+  const parseImageTimestamp = (filename: string): number | null => {
+    // 1. [MM-SS], [MM:SS], [MM_SS]
+    let m = /\[(\d{1,2})[-:_](\d{2})\]/.exec(filename);
+    if (m) return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+
+    // 2. MMmSSs (e.g. 01m30s)
+    m = /(\d{1,2})m(\d{2})s/i.exec(filename);
+    if (m) return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+
+    // 3. MM-SS, MM:SS, MM_SS anywhere in filename (e.g. 00-14, 01_30, 00:14)
+    m = /(?:^|[^\d])(\d{1,2})[-:_](\d{2})(?:[^\d]|$)/.exec(filename);
+    if (m) {
+      const mins = parseInt(m[1], 10);
+      const secs = parseInt(m[2], 10);
+      if (mins < 60 && secs < 60) {
+        return mins * 60 + secs;
+      }
+    }
+
+    return null;
+  };
+
   const handleImagesSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
 
-    const pat = /\[(\d{1,2})-(\d{2})\]/;
-    const parsed: SceneImage[] = [];
+    const validImageFiles = files.filter((f) => /\.(jpg|jpeg|png|webp)$/i.test(f.name));
+    if (!validImageFiles.length) {
+      setImageFolderNote({
+        type: 'warn',
+        msg: '⚠ Nenhum arquivo de imagem válido (.jpg, .png, .webp) selecionado.',
+      });
+      return;
+    }
 
-    files.forEach((f) => {
-      if (/\.(jpg|jpeg|png|webp)$/i.test(f.name)) {
-        const m = pat.exec(f.name);
-        if (m) {
-          const ts = parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
-          parsed.push({
-            name: f.name,
-            timestamp: ts,
-            file: f,
-          });
-        }
+    const parsedWithTs: SceneImage[] = [];
+    const unparsedFiles: File[] = [];
+
+    validImageFiles.forEach((f) => {
+      const ts = parseImageTimestamp(f.name);
+      if (ts !== null) {
+        parsedWithTs.push({ name: f.name, timestamp: ts, file: f });
+      } else {
+        unparsedFiles.push(f);
       }
     });
 
-    if (parsed.length > 0) {
-      parsed.sort((a, b) => a.timestamp - b.timestamp);
-      setImageFiles(parsed);
+    if (parsedWithTs.length > 0) {
+      parsedWithTs.sort((a, b) => a.timestamp - b.timestamp);
+      setImageFiles(parsedWithTs);
       setImageFolderNote({
         type: 'ok',
-        msg: `✓ ${parsed.length} imagens com timestamp [MM-SS] selecionadas`,
+        msg: `✓ ${parsedWithTs.length} imagens com timestamp detectadas e organizadas!`,
       });
     } else {
+      // Fallback: Sort unparsed files naturally (e.g. 1.png, 2.png, image_01.jpg)
+      unparsedFiles.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+
+      const totalDuration = audioDuration || (segments.length ? Math.max(...segments.map((s) => s.start)) + 10 : 60);
+      const autoParsed: SceneImage[] = unparsedFiles.map((f, index) => {
+        let ts = 0;
+        if (segments.length && index < segments.length) {
+          ts = segments[index].start;
+        } else {
+          ts = Math.floor((index / unparsedFiles.length) * totalDuration);
+        }
+        return { name: f.name, timestamp: ts, file: f };
+      });
+
+      setImageFiles(autoParsed);
       setImageFolderNote({
-        type: 'warn',
-        msg: '⚠ Nenhuma imagem com formato [MM-SS] no nome encontrada.',
+        type: 'ok',
+        msg: `✓ ${autoParsed.length} imagens carregadas e organizadas em ordem sequencial (${unparsedFiles[0]?.name}...)`,
       });
     }
   };
@@ -679,6 +720,10 @@ ${srtText}`;
               {imageFolderNote.msg}
             </div>
           )}
+
+          <div className="text-[11px] text-text-muted/70 mt-2">
+            💡 Aceita no nome: <strong className="text-white">00-14.png</strong>, <strong className="text-white">[00-14].png</strong>, <strong className="text-white">00_14.png</strong>, <strong className="text-white">00:14.png</strong> ou fotos numeradas (<strong className="text-white">1.png, 2.png...</strong>).
+          </div>
         </div>
 
         {/* PASSO 4: MONTAR E EXPORTAR CAPCUT ZIP */}
