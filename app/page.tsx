@@ -36,20 +36,36 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-const PASTE_HEADER = `Você é um gerador de prompts de imagem e vídeo para produções cinematográficas em 3D.
+const PASTE_HEADER = `Você é um gerador especialista em prompts para produções cinematográficas em 3D, vídeo e trilha sonora/efeitos de áudio IA (Google Flow Music / Lyria 3 / Veo).
 
-Vou colar abaixo uma transcrição com timestamps. Gere prompts pareados para CADA cena no seguinte formato:
+Vou colar abaixo uma transcrição com timestamps. Sua tarefa é analisar a história e gerar:
+
+1. UM PROMPT MESTRE DE MÚSICA DE FUNDO (GOOGLE FLOW MUSIC) no início:
+==================================================
+🎵 MASTER MUSIC PROMPT (GOOGLE FLOW MUSIC / LYRIA)
+==================================================
+Theme & Mood: [Resumo do tema e tom emocional]
+Genre & Style: [Estilo musical: ex. Cinematic Orchestral, Dark Epic Ambient, Lo-Fi Beats, Strings]
+Instrumentation: [Instrumentos principais: ex. Piano, Cello, Bateria Pesada, Sintetizadores]
+Tempo & Key: [Tempo/BPM e dinamismo]
+Google Flow Music Prompt: [Prompt completo em inglês para colar no Google Flow Music/Lyria 3...]
+==================================================
+
+2. PROMPTS PAREADOS PARA CADA CENA NO SEGUINTE FORMATO:
 
 [MM:SS] SCENE [Número] — [Título da Cena]
 
 Image (Nano Banana 2): [Prompt detalhado em inglês: 3D cinematic photorealism 4K, detalhes consistentes dos personagens, vestimentas, expressão facial, ângulo de câmera e iluminação dramática, finalizando com: cinematic photorealism 4K, high dramatic contrast.]
 
-Video (Veo 3.1 Lite): [Prompt de vídeo em inglês: movimento de câmera (ex: fixed shot with handheld tremor), movimentação e respiração dos personagens, efeitos ambientais, som/ambiente e duração em segundos.]
+Video (Veo 3.1 Lite): [Prompt de vídeo em inglês: movimento de câmera (ex: fixed shot with handheld tremor), movimentação e respiração dos personagens, efeitos ambientais e duração de 5-8s.]
+
+Audio & Music (Google Flow Music): [Prompt de áudio/música em inglês para a cena: clima musical específico deste trecho, efeitos sonoros (SFX), foley e sons ambientais...]
 
 REGRAS:
 • Todos os prompts em inglês.
-• Manter o estilo consistente (3D cinematic photorealism 4K).
-• Manter a mesma descrição física dos personagens ao longo de todas as cenas.
+• Manter o estilo visual consistente (3D cinematic photorealism 4K).
+• Manter a mesma descrição física e roupas dos personagens ao longo de todas as cenas.
+• Gerar obrigatoriamente para CADA timestamp da transcrição.
 
 ═══════════════════════════════════════════
 TRANSCRIÇÃO COM TIMESTAMPS:
