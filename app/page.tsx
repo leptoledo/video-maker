@@ -398,26 +398,36 @@ ${srtText}`;
     return null;
   };
 
-  const handleImagesSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    if (!files.length) return;
-
-    const validImageFiles = files.filter((f) => /\.(jpg|jpeg|png|webp)$/i.test(f.name));
-    if (!validImageFiles.length) {
-      setImageFolderNote({
-        type: 'warn',
-        msg: '⚠ Nenhum arquivo de imagem válido (.jpg, .png, .webp) selecionado.',
-      });
-      return;
+  const processMediaFiles = (
+    newFiles: File[],
+    append: boolean = false
+  ): { items: SceneImage[]; note: { type: 'ok' | 'warn'; msg: string } } => {
+    const validFiles = newFiles.filter((f) =>
+      /\.(jpg|jpeg|png|webp|mp4|mov|webm|mkv|avi)$/i.test(f.name)
+    );
+    if (!validFiles.length) {
+      return {
+        items: append ? imageFiles : [],
+        note: {
+          type: 'warn',
+          msg: '⚠ Nenhum arquivo de mídia válido (.jpg, .png, .webp, .mp4, .mov, .webm) selecionado.',
+        },
+      };
     }
+
+    const combinedFiles = append
+      ? [...imageFiles.map((m) => m.file), ...validFiles]
+      : validFiles;
 
     const parsedWithTs: SceneImage[] = [];
     const unparsedFiles: File[] = [];
 
-    validImageFiles.forEach((f) => {
+    combinedFiles.forEach((f) => {
       const ts = parseImageTimestamp(f.name);
+      const isVideo = /\.(mp4|mov|webm|mkv|avi)$/i.test(f.name);
+      const type: 'image' | 'video' = isVideo ? 'video' : 'image';
       if (ts !== null) {
-        parsedWithTs.push({ name: f.name, timestamp: ts, file: f });
+        parsedWithTs.push({ name: f.name, timestamp: ts, file: f, type });
       } else {
         unparsedFiles.push(f);
       }
@@ -425,16 +435,27 @@ ${srtText}`;
 
     if (parsedWithTs.length > 0) {
       parsedWithTs.sort((a, b) => a.timestamp - b.timestamp);
-      setImageFiles(parsedWithTs);
-      setImageFolderNote({
-        type: 'ok',
-        msg: `✓ ${parsedWithTs.length} imagens com timestamp detectadas e organizadas!`,
-      });
-    } else {
-      // Fallback: Sort unparsed files naturally (e.g. 1.png, 2.png, image_01.jpg)
-      unparsedFiles.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+      const imgCount = parsedWithTs.filter((m) => m.type !== 'video').length;
+      const vidCount = parsedWithTs.filter((m) => m.type === 'video').length;
+      const parts = [];
+      if (imgCount > 0) parts.push(`${imgCount} imagem(ns)`);
+      if (vidCount > 0) parts.push(`${vidCount} vídeo(s)`);
 
-      const totalDuration = audioDuration || (segments.length ? Math.max(...segments.map((s) => s.start)) + 10 : 60);
+      return {
+        items: parsedWithTs,
+        note: {
+          type: 'ok',
+          msg: `✓ ${parts.join(' e ')} com timestamp carregados e organizados!`,
+        },
+      };
+    } else {
+      unparsedFiles.sort((a, b) =>
+        a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
+      );
+
+      const totalDuration =
+        audioDuration ||
+        (segments.length ? Math.max(...segments.map((s) => s.start)) + 10 : 60);
       const autoParsed: SceneImage[] = unparsedFiles.map((f, index) => {
         let ts = 0;
         if (segments.length && index < segments.length) {
@@ -442,15 +463,41 @@ ${srtText}`;
         } else {
           ts = Math.floor((index / unparsedFiles.length) * totalDuration);
         }
-        return { name: f.name, timestamp: ts, file: f };
+        const isVideo = /\.(mp4|mov|webm|mkv|avi)$/i.test(f.name);
+        const type: 'image' | 'video' = isVideo ? 'video' : 'image';
+        return { name: f.name, timestamp: ts, file: f, type };
       });
 
-      setImageFiles(autoParsed);
-      setImageFolderNote({
-        type: 'ok',
-        msg: `✓ ${autoParsed.length} imagens carregadas e organizadas em ordem sequencial (${unparsedFiles[0]?.name}...)`,
-      });
+      const imgCount = autoParsed.filter((m) => m.type !== 'video').length;
+      const vidCount = autoParsed.filter((m) => m.type === 'video').length;
+      const parts = [];
+      if (imgCount > 0) parts.push(`${imgCount} imagem(ns)`);
+      if (vidCount > 0) parts.push(`${vidCount} vídeo(s)`);
+
+      return {
+        items: autoParsed,
+        note: {
+          type: 'ok',
+          msg: `✓ ${parts.join(' e ')} carregados em ordem sequencial (${unparsedFiles[0]?.name}...)`,
+        },
+      };
     }
+  };
+
+  const handleImagesSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    const res = processMediaFiles(files, true);
+    setImageFiles(res.items);
+    setImageFolderNote(res.note);
+  };
+
+  const handleVideosSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    const res = processMediaFiles(files, true);
+    setImageFiles(res.items);
+    setImageFolderNote(res.note);
   };
 
   const handleAssembleCapCut = async () => {
@@ -685,27 +732,42 @@ ${srtText}`;
               3
             </div>
             <div className="text-xs font-extrabold tracking-wider uppercase text-text">
-              Imagens (do LCTNET FLOW)
+              Mídias (Imagens & Vídeos do LCTNET FLOW)
             </div>
           </div>
 
           <div className="flex items-center gap-3 flex-wrap">
             <span className="flex-1 min-w-0 text-xs text-text-muted truncate">
               {imageFiles.length > 0
-                ? `${imageFiles.length} imagens com timestamp carregadas`
-                : 'Nenhuma imagem selecionada'}
+                ? `${imageFiles.filter((m) => m.type !== 'video').length} imagens e ${
+                    imageFiles.filter((m) => m.type === 'video').length
+                  } vídeos carregados`
+                : 'Nenhuma mídia selecionada'}
             </span>
-            <label className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg font-bold text-xs bg-surface-el border border-border-strong text-text cursor-pointer hover:-translate-y-0.5 transition-all">
-              <ImagePlus className="w-4 h-4 text-cyan" />
-              <span>Selecionar Imagens</span>
-              <input
-                type="file"
-                multiple
-                accept="image/*"
-                onChange={handleImagesSelect}
-                className="hidden"
-              />
-            </label>
+            <div className="flex items-center gap-2 flex-wrap">
+              <label className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg font-bold text-xs bg-surface-el border border-border-strong text-text cursor-pointer hover:-translate-y-0.5 transition-all">
+                <ImagePlus className="w-4 h-4 text-cyan" />
+                <span>+ Selecionar Imagens</span>
+                <input
+                  type="file"
+                  multiple
+                  accept="image/*"
+                  onChange={handleImagesSelect}
+                  className="hidden"
+                />
+              </label>
+              <label className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg font-bold text-xs bg-surface-el border border-orange/40 text-orange cursor-pointer hover:-translate-y-0.5 transition-all">
+                <Film className="w-4 h-4 text-orange" />
+                <span>🎬 Selecionar Vídeos</span>
+                <input
+                  type="file"
+                  multiple
+                  accept="video/*"
+                  onChange={handleVideosSelect}
+                  className="hidden"
+                />
+              </label>
+            </div>
           </div>
 
           {imageFolderNote && (
@@ -722,7 +784,7 @@ ${srtText}`;
           )}
 
           <div className="text-[11px] text-text-muted/70 mt-2">
-            💡 Aceita no nome: <strong className="text-white">00-14.png</strong>, <strong className="text-white">[00-14].png</strong>, <strong className="text-white">00_14.png</strong>, <strong className="text-white">00:14.png</strong> ou fotos numeradas (<strong className="text-white">1.png, 2.png...</strong>).
+            💡 Aceita imagens (<strong className="text-white">.jpg, .png, .webp</strong>) e vídeos (<strong className="text-white">.mp4, .mov, .webm</strong>). Formatos no nome: <strong className="text-white">00-14</strong>, <strong className="text-white">[00-14]</strong>, <strong className="text-white">00_14</strong>, <strong className="text-white">00:14</strong> ou arquivos numerados em ordem.
           </div>
         </div>
 

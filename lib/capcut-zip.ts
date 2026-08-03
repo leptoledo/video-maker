@@ -5,6 +5,7 @@ export interface SceneImage {
   name: string;
   timestamp: number; // in seconds
   file: File;
+  type?: 'image' | 'video';
 }
 
 function newUUID(): string {
@@ -103,9 +104,11 @@ export async function generateCapCutZip(
       // Add image file to zip folder
       projectFolder.file(img.name, img.file);
 
-      // Clone material photo
+      // Clone material photo/video
+      const isVideo = img.type === 'video' || /\.(mp4|mov|webm|mkv|avi)$/i.test(img.name);
       const mphoto = JSON.parse(JSON.stringify(refCapCut.material_photo));
       mphoto.id = newUUID();
+      mphoto.type = isVideo ? 'video' : 'photo';
       mphoto.path = img.name;
       mphoto.material_name = img.name;
       mphoto.width = aspectRatio.width;
