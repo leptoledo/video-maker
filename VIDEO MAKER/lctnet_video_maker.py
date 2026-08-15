@@ -499,7 +499,6 @@ dialog input{ width:100%; margin:10px 0; padding:9px 11px; background:var(--surf
       <button class="btn btn-green" id="btnCopy" onclick="copyPaste()">📋 Copiar Prompt + SRT</button>
       <button class="btn btn-ghost" onclick="downloadTxt()">↓ Salvar .txt</button>
       <button class="btn btn-ghost" style="color:var(--cyan);border-color:rgba(0,187,255,.3)" onclick="downloadSrt()">🎬 Salvar Legenda (.srt)</button>
-      <button class="btn btn-orange" style="margin-left:auto" onclick="openApi()">✨ Gerar via API (pago)</button>
     </div>
     <div class="hint">💡 Grátis: clique "Copiar Prompt + SRT", cole no Claude/ChatGPT, copie os prompts e gere as imagens no LCTNET FLOW.</div>
   </div>

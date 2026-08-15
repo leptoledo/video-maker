@@ -1047,18 +1047,6 @@ ${srtText}`;
               <span>🎬 Salvar Legenda (.srt)</span>
             </button>
 
-            <button
-              onClick={handleGenPromptsAI}
-              disabled={!srtText || isGenPrompts}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg font-bold text-xs bg-orange/15 border border-orange/40 text-orange ml-auto hover:-translate-y-0.5 transition-all disabled:opacity-30"
-            >
-              {isGenPrompts ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Sparkles className="w-4 h-4" />
-              )}
-              <span>✨ Gerar Prompts via Gemini Pro</span>
-            </button>
           </div>
 
           <div className="text-[11px] text-text-muted/70 mt-2">
