@@ -100,10 +100,16 @@ export async function POST(req: NextRequest) {
         let groqRes: Response | null = null;
         let groqErrText = '';
 
+        const origName = file.name || 'audio.mp3';
+        const extMatch = origName.match(/\.(flac|mp3|mp4|mpeg|mpga|m4a|ogg|opus|wav|webm)$/i);
+        const ext = extMatch ? extMatch[1].toLowerCase() : 'mp3';
+        const mimeType = file.type && file.type.includes('audio') ? file.type : `audio/${ext === 'mp3' ? 'mpeg' : ext}`;
+        const cleanFile = new File([await file.arrayBuffer()], `audio.${ext}`, { type: mimeType });
+
         const modelsToTry = ['whisper-large-v3-turbo', 'whisper-large-v3'];
         for (const modelName of modelsToTry) {
           const groqFormData = new FormData();
-          groqFormData.append('file', file);
+          groqFormData.append('file', cleanFile, `audio.${ext}`);
           groqFormData.append('model', modelName);
           groqFormData.append('response_format', 'verbose_json');
           groqFormData.append('language', 'pt');

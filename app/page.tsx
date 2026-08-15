@@ -241,13 +241,19 @@ export default function HomePage() {
     // 1. GROQ WHISPER CLIENT-SIDE EXECUTION (100% PRECISE TIMESTAMPS & ULTRA FAST)
     if (activeGroqKey) {
       try {
+        // Normalize audio filename & extension to lowercase for Groq API validation (e.g. .MP3 -> .mp3)
+        const origName = audioFile.name || 'audio.mp3';
+        const extMatch = origName.match(/\.(flac|mp3|mp4|mpeg|mpga|m4a|ogg|opus|wav|webm)$/i);
+        const ext = extMatch ? extMatch[1].toLowerCase() : 'mp3';
+        const mimeType = audioFile.type && audioFile.type.includes('audio') ? audioFile.type : `audio/${ext === 'mp3' ? 'mpeg' : ext}`;
+        const cleanAudioFile = new File([audioFile], `audio.${ext}`, { type: mimeType });
         let groqRes: Response | null = null;
         let groqErrText = '';
 
         const modelsToTry = ['whisper-large-v3-turbo', 'whisper-large-v3'];
         for (const modelName of modelsToTry) {
           const groqFormData = new FormData();
-          groqFormData.append('file', audioFile);
+          groqFormData.append('file', cleanAudioFile, `audio.${ext}`);
           groqFormData.append('model', modelName);
           groqFormData.append('response_format', 'verbose_json');
           groqFormData.append('language', 'pt');
