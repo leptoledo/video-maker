@@ -241,24 +241,48 @@ export default function HomePage() {
     // 1. GROQ WHISPER CLIENT-SIDE EXECUTION (100% PRECISE TIMESTAMPS & ULTRA FAST)
     if (activeGroqKey) {
       try {
-        const groqFormData = new FormData();
-        groqFormData.append('file', audioFile);
-        groqFormData.append('model', 'whisper-large-v3-turbo');
-        groqFormData.append('response_format', 'verbose_json');
-        groqFormData.append('language', 'pt');
-        groqFormData.append('temperature', '0');
+        let groqRes: Response | null = null;
+        let groqErrText = '';
 
-        const groqRes = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${activeGroqKey}`,
-          },
-          body: groqFormData,
-        });
+        const modelsToTry = ['whisper-large-v3-turbo', 'whisper-large-v3'];
+        for (const modelName of modelsToTry) {
+          const groqFormData = new FormData();
+          groqFormData.append('file', audioFile);
+          groqFormData.append('model', modelName);
+          groqFormData.append('response_format', 'verbose_json');
+          groqFormData.append('language', 'pt');
 
-        if (!groqRes.ok) {
-          const errBody = await groqRes.text();
-          throw new Error(`Erro na API do Groq (${groqRes.status}): ${errBody.slice(0, 120)}`);
+          groqRes = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${activeGroqKey.trim()}`,
+            },
+            body: groqFormData,
+          });
+
+          if (groqRes.ok) break;
+          groqErrText = await groqRes.text();
+        }
+
+        if (!groqRes || !groqRes.ok) {
+          let readableErr = groqErrText;
+          try {
+            const parsed = JSON.parse(groqErrText);
+            readableErr = parsed.error?.message || groqErrText;
+          } catch {}
+
+          if (groqRes?.status === 401) {
+            readableErr = 'Chave do Groq API inválida. Verifique se a chave inserida no campo do Groq está correta e inicia com gsk_';
+          } else if (groqRes?.status === 413) {
+            readableErr = 'O arquivo de áudio excede o limite do Groq API (25MB).';
+          }
+
+          setIsTranscribing(false);
+          setTranscribeNote({
+            type: 'err',
+            msg: `✗ Erro na API do Groq (${groqRes?.status || 'Erro'}): ${readableErr}`,
+          });
+          return;
         }
 
         const groqData = await groqRes.json();
@@ -289,15 +313,13 @@ export default function HomePage() {
         });
         return;
       } catch (err: any) {
-        console.warn('Client-side Groq Error:', err);
-        if (!activeGeminiKey) {
-          setIsTranscribing(false);
-          setTranscribeNote({
-            type: 'err',
-            msg: `✗ Erro na Chave Groq API: ${err.message || 'Verifique se a chave informada inicia com gsk_'}`,
-          });
-          return;
-        }
+        console.error('Client-side Groq Error:', err);
+        setIsTranscribing(false);
+        setTranscribeNote({
+          type: 'err',
+          msg: `✗ Erro na Chave Groq API: ${err.message || 'Verifique se a chave informada inicia com gsk_'}`,
+        });
+        return;
       }
     }
 

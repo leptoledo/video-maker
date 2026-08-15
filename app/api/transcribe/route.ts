@@ -97,25 +97,44 @@ export async function POST(req: NextRequest) {
     // 1. GROQ WHISPER API (PREFERRED & ULTRA FAST FOR VERCEL)
     if (groqApiKey) {
       try {
-        const groqFormData = new FormData();
-        groqFormData.append('file', file);
-        groqFormData.append('model', 'whisper-large-v3-turbo');
-        groqFormData.append('response_format', 'verbose_json');
-        groqFormData.append('language', 'pt');
-        groqFormData.append('temperature', '0');
+        let groqRes: Response | null = null;
+        let groqErrText = '';
 
-        const groqRes = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${groqApiKey}`,
-          },
-          body: groqFormData,
-        });
+        const modelsToTry = ['whisper-large-v3-turbo', 'whisper-large-v3'];
+        for (const modelName of modelsToTry) {
+          const groqFormData = new FormData();
+          groqFormData.append('file', file);
+          groqFormData.append('model', modelName);
+          groqFormData.append('response_format', 'verbose_json');
+          groqFormData.append('language', 'pt');
 
-        if (!groqRes.ok) {
-          const errBody = await groqRes.text();
-          console.warn('[Groq API Error]:', groqRes.status, errBody);
-          throw new Error(`Erro na API do Groq (${groqRes.status}): ${errBody.slice(0, 120)}`);
+          groqRes = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${groqApiKey.trim()}`,
+            },
+            body: groqFormData,
+          });
+
+          if (groqRes.ok) break;
+          groqErrText = await groqRes.text();
+        }
+
+        if (!groqRes || !groqRes.ok) {
+          let readableErr = groqErrText;
+          try {
+            const parsed = JSON.parse(groqErrText);
+            readableErr = parsed.error?.message || groqErrText;
+          } catch {}
+
+          if (groqRes?.status === 401) {
+            readableErr = 'Chave do Groq API inválida. Verifique se a chave inserida inicia com gsk_';
+          }
+
+          return NextResponse.json(
+            { ok: false, error: `Erro na API do Groq (${groqRes?.status || 'Erro'}): ${readableErr}` },
+            { status: groqRes?.status || 400 }
+          );
         }
 
         const groqData = await groqRes.json();
@@ -147,10 +166,8 @@ export async function POST(req: NextRequest) {
           paste: pasteText,
         });
       } catch (groqErr: any) {
-        console.warn('[Groq Fallback to Gemini]:', groqErr?.message);
-        if (!providedApiKey && !process.env.GEMINI_API_KEY && !process.env.NEXT_PUBLIC_GEMINI_API_KEY) {
-          return NextResponse.json({ ok: false, error: groqErr.message }, { status: 400 });
-        }
+        console.warn('[Groq API Error]:', groqErr?.message);
+        return NextResponse.json({ ok: false, error: `Erro na API do Groq: ${groqErr.message}` }, { status: 400 });
       }
     }
 
