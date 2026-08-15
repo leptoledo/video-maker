@@ -79,15 +79,90 @@ export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
     const file = formData.get('audio') as File | null;
-    const userApiKey = (formData.get('apiKey') as string) || process.env.NEXT_PUBLIC_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+    const providedApiKey = (formData.get('apiKey') as string) || '';
+    const providedGroqKey = (formData.get('groqApiKey') as string) || '';
+    const targetAudioDuration = Number(formData.get('audioDuration')) || 0;
 
     if (!file) {
       return NextResponse.json({ ok: false, error: 'Nenhum arquivo de áudio enviado.' }, { status: 400 });
     }
 
-    if (!userApiKey) {
+    // Determine Groq API Key
+    const groqApiKey =
+      (providedGroqKey && providedGroqKey.startsWith('gsk_') ? providedGroqKey : null) ||
+      (providedApiKey && providedApiKey.startsWith('gsk_') ? providedApiKey : null) ||
+      process.env.GROQ_API_KEY ||
+      process.env.NEXT_PUBLIC_GROQ_API_KEY;
+
+    // 1. GROQ WHISPER API (PREFERRED & ULTRA FAST FOR VERCEL)
+    if (groqApiKey) {
+      try {
+        const groqFormData = new FormData();
+        groqFormData.append('file', file);
+        groqFormData.append('model', 'whisper-large-v3-turbo');
+        groqFormData.append('response_format', 'verbose_json');
+        groqFormData.append('language', 'pt');
+        groqFormData.append('temperature', '0');
+
+        const groqRes = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${groqApiKey}`,
+          },
+          body: groqFormData,
+        });
+
+        if (!groqRes.ok) {
+          const errBody = await groqRes.text();
+          console.warn('[Groq API Error]:', groqRes.status, errBody);
+          throw new Error(`Erro na API do Groq (${groqRes.status}): ${errBody.slice(0, 120)}`);
+        }
+
+        const groqData = await groqRes.json();
+        const rawSegments = groqData.segments || [];
+
+        const segments = rawSegments
+          .map((s: any) => ({
+            start: Math.floor(Number(s.start) || 0),
+            text: (s.text || '').trim(),
+          }))
+          .filter((s: any) => s.text);
+
+        const srtLines = segments.map((s: any) => {
+          const minutes = Math.floor(s.start / 60);
+          const seconds = Math.floor(s.start % 60);
+          const mm = String(minutes).padStart(2, '0');
+          const ss = String(seconds).padStart(2, '0');
+          return `[${mm}:${ss}] ${s.text}`;
+        });
+
+        const pasteText = PASTE_INSTRUCTIONS_HEADER + '\n' + srtLines.join('\n');
+
+        return NextResponse.json({
+          ok: true,
+          provider: 'Groq Whisper',
+          count: segments.length,
+          segments,
+          srt: srtLines.join('\n'),
+          paste: pasteText,
+        });
+      } catch (groqErr: any) {
+        console.warn('[Groq Fallback to Gemini]:', groqErr?.message);
+        if (!providedApiKey && !process.env.GEMINI_API_KEY && !process.env.NEXT_PUBLIC_GEMINI_API_KEY) {
+          return NextResponse.json({ ok: false, error: groqErr.message }, { status: 400 });
+        }
+      }
+    }
+
+    // 2. GEMINI PRO API FALLBACK (WITH TIMESTAMP NORMALIZATION/CALIBRATION)
+    const geminiApiKey =
+      (providedApiKey && !providedApiKey.startsWith('gsk_') ? providedApiKey : null) ||
+      process.env.GEMINI_API_KEY ||
+      process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+
+    if (!geminiApiKey) {
       return NextResponse.json(
-        { ok: false, error: 'Chave de API do Gemini não fornecida. Informe sua chave do Gemini Pro.' },
+        { ok: false, error: 'Forneça uma chave do Groq API (gsk_...) ou do Google Gemini API para transcrever.' },
         { status: 400 }
       );
     }
@@ -96,8 +171,8 @@ export async function POST(req: NextRequest) {
     const base64Audio = Buffer.from(arrayBuffer).toString('base64');
     const mimeType = file.type || 'audio/mp3';
 
-    const genAI = new GoogleGenerativeAI(userApiKey);
-    const candidateModels = await getAvailableGeminiModels(userApiKey);
+    const genAI = new GoogleGenerativeAI(geminiApiKey);
+    const candidateModels = await getAvailableGeminiModels(geminiApiKey);
 
     const prompt = `Transcreva este áudio com precisão em Português e divida em segmentos curtos com timestamps (em segundos).
 Retorne estritamente um array JSON com a estrutura:
@@ -151,12 +226,26 @@ Retorne estritamente um array JSON com a estrutura:
       }
     }
 
-    const segments = rawSegments.map((s) => ({
-      start: Number(s.start) || 0,
-      text: (s.text || '').trim(),
-    })).filter(s => s.text);
+    let parsedSegments = rawSegments
+      .map((s) => ({
+        start: Number(s.start) || 0,
+        text: (s.text || '').trim(),
+      }))
+      .filter((s) => s.text);
 
-    const srtLines = segments.map((s) => {
+    // Apply Timestamp Normalization Calibration if Gemini drifted beyond real duration
+    if (parsedSegments.length > 0) {
+      const maxStart = Math.max(...parsedSegments.map((s) => s.start));
+      if (targetAudioDuration > 0 && maxStart > targetAudioDuration * 1.1) {
+        const calibrationRatio = (targetAudioDuration * 0.95) / maxStart;
+        parsedSegments = parsedSegments.map((s) => ({
+          start: Math.floor(s.start * calibrationRatio),
+          text: s.text,
+        }));
+      }
+    }
+
+    const srtLines = parsedSegments.map((s) => {
       const minutes = Math.floor(s.start / 60);
       const seconds = Math.floor(s.start % 60);
       const mm = String(minutes).padStart(2, '0');
@@ -168,15 +257,16 @@ Retorne estritamente um array JSON com a estrutura:
 
     return NextResponse.json({
       ok: true,
-      count: segments.length,
-      segments,
+      provider: 'Gemini (Calibrado)',
+      count: parsedSegments.length,
+      segments: parsedSegments,
       srt: srtLines.join('\n'),
       paste: pasteText,
     });
   } catch (error: any) {
-    console.error('Gemini Transcription Error:', error);
+    console.error('Transcription Error:', error);
     return NextResponse.json(
-      { ok: false, error: error.message || 'Erro ao processar áudio com Gemini Pro.' },
+      { ok: false, error: error.message || 'Erro ao processar áudio.' },
       { status: 500 }
     );
   }

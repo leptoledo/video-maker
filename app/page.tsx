@@ -77,6 +77,7 @@ export default function HomePage() {
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [audioDuration, setAudioDuration] = useState<number>(0);
   const [apiKey, setApiKey] = useState<string>('');
+  const [groqApiKey, setGroqApiKey] = useState<string>('');
   const [isTranscribing, setIsTranscribing] = useState<boolean>(false);
   const [transcribeNote, setTranscribeNote] = useState<{ type: 'ok' | 'err' | 'warn'; msg: string } | null>(null);
 
@@ -118,12 +119,20 @@ export default function HomePage() {
   };
 
   useEffect(() => {
-    const savedKey = localStorage.getItem('lctnet_gemini_key');
-    const envKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || '';
-    if (savedKey) {
-      setApiKey(savedKey);
-    } else if (envKey) {
-      setApiKey(envKey);
+    const savedGeminiKey = localStorage.getItem('lctnet_gemini_key');
+    const envGeminiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || '';
+    if (savedGeminiKey) {
+      setApiKey(savedGeminiKey);
+    } else if (envGeminiKey) {
+      setApiKey(envGeminiKey);
+    }
+
+    const savedGroqKey = localStorage.getItem('lctnet_groq_key');
+    const envGroqKey = process.env.NEXT_PUBLIC_GROQ_API_KEY || '';
+    if (savedGroqKey) {
+      setGroqApiKey(savedGroqKey);
+    } else if (envGroqKey) {
+      setGroqApiKey(envGroqKey);
     }
 
     // Restore saved transcription session if available
@@ -176,6 +185,11 @@ export default function HomePage() {
     localStorage.setItem('lctnet_gemini_key', val);
   };
 
+  const handleSaveGroqKey = (val: string) => {
+    setGroqApiKey(val);
+    localStorage.setItem('lctnet_groq_key', val);
+  };
+
   const handleClearSession = () => {
     if (window.confirm('Deseja realmente limpar a transcrição salva e iniciar um novo projeto?')) {
       localStorage.removeItem('lctnet_saved_session');
@@ -213,14 +227,86 @@ export default function HomePage() {
     setIsTranscribing(true);
     setTranscribeNote(null);
 
-    const activeKey = apiKey.trim() || process.env.NEXT_PUBLIC_GEMINI_API_KEY || '';
+    const activeGroqKey =
+      groqApiKey.trim() ||
+      (apiKey.trim().startsWith('gsk_') ? apiKey.trim() : '') ||
+      process.env.NEXT_PUBLIC_GROQ_API_KEY ||
+      '';
 
-    // 1. Direct Browser Client-Side Execution (Bypasses Vercel 10s Serverless Timeout)
-    if (activeKey) {
+    const activeGeminiKey =
+      apiKey.trim() && !apiKey.trim().startsWith('gsk_')
+        ? apiKey.trim()
+        : process.env.NEXT_PUBLIC_GEMINI_API_KEY || '';
+
+    // 1. GROQ WHISPER CLIENT-SIDE EXECUTION (100% PRECISE TIMESTAMPS & ULTRA FAST)
+    if (activeGroqKey) {
+      try {
+        const groqFormData = new FormData();
+        groqFormData.append('file', audioFile);
+        groqFormData.append('model', 'whisper-large-v3-turbo');
+        groqFormData.append('response_format', 'verbose_json');
+        groqFormData.append('language', 'pt');
+        groqFormData.append('temperature', '0');
+
+        const groqRes = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${activeGroqKey}`,
+          },
+          body: groqFormData,
+        });
+
+        if (!groqRes.ok) {
+          const errBody = await groqRes.text();
+          throw new Error(`Erro na API do Groq (${groqRes.status}): ${errBody.slice(0, 120)}`);
+        }
+
+        const groqData = await groqRes.json();
+        const rawSegments = groqData.segments || [];
+
+        const parsedSegments = rawSegments
+          .map((s: any) => ({
+            start: Math.floor(Number(s.start) || 0),
+            text: (s.text || '').trim(),
+          }))
+          .filter((s: any) => s.text);
+
+        const srtLines = parsedSegments.map((s: any) => {
+          const minutes = Math.floor(s.start / 60);
+          const seconds = Math.floor(s.start % 60);
+          const mm = String(minutes).padStart(2, '0');
+          const ss = String(seconds).padStart(2, '0');
+          return `[${mm}:${ss}] ${s.text}`;
+        });
+
+        setIsTranscribing(false);
+        setSegments(parsedSegments);
+        setSrtText(srtLines.join('\n'));
+        setPasteText(PASTE_HEADER + '\n' + srtLines.join('\n'));
+        setTranscribeNote({
+          type: 'ok',
+          msg: `✓ ${parsedSegments.length} segmentos transcritos com precisão absoluta via Groq Whisper API!`,
+        });
+        return;
+      } catch (err: any) {
+        console.warn('Client-side Groq Error:', err);
+        if (!activeGeminiKey) {
+          setIsTranscribing(false);
+          setTranscribeNote({
+            type: 'err',
+            msg: `✗ Erro na Chave Groq API: ${err.message || 'Verifique se a chave informada inicia com gsk_'}`,
+          });
+          return;
+        }
+      }
+    }
+
+    // 2. GEMINI PRO CLIENT-SIDE EXECUTION (WITH TIMESTAMP CALIBRATION)
+    if (activeGeminiKey) {
       try {
         const base64Audio = await fileToBase64(audioFile);
         const mimeType = audioFile.type || 'audio/mp3';
-        const genAI = new GoogleGenerativeAI(activeKey);
+        const genAI = new GoogleGenerativeAI(activeGeminiKey);
 
         const candidateModels = [
           'gemini-flash-latest',
@@ -279,12 +365,24 @@ Retorne estritamente um array JSON com a estrutura:
           if (jsonMatch) rawSegments = JSON.parse(jsonMatch[0]);
         }
 
-        const parsedSegments = rawSegments
+        let parsedSegments = rawSegments
           .map((s) => ({
             start: Number(s.start) || 0,
             text: (s.text || '').trim(),
           }))
           .filter((s) => s.text);
+
+        // Calibrate Gemini timestamps if they drifted beyond actual audio duration
+        if (parsedSegments.length > 0) {
+          const maxStart = Math.max(...parsedSegments.map((s) => s.start));
+          if (audioDuration > 0 && maxStart > audioDuration * 1.1) {
+            const calibrationRatio = (audioDuration * 0.95) / maxStart;
+            parsedSegments = parsedSegments.map((s) => ({
+              start: Math.floor(s.start * calibrationRatio),
+              text: s.text,
+            }));
+          }
+        }
 
         const srtLines = parsedSegments.map((s) => {
           const minutes = Math.floor(s.start / 60);
@@ -300,7 +398,7 @@ Retorne estritamente um array JSON com a estrutura:
         setPasteText(PASTE_HEADER + '\n' + srtLines.join('\n'));
         setTranscribeNote({
           type: 'ok',
-          msg: `✓ ${parsedSegments.length} segmentos transcritos diretamente no navegador com sucesso!`,
+          msg: `✓ ${parsedSegments.length} segmentos transcritos (calibrados) com Gemini Pro!`,
         });
         return;
       } catch (err: any) {
@@ -308,18 +406,18 @@ Retorne estritamente um array JSON com a estrutura:
         setIsTranscribing(false);
         setTranscribeNote({
           type: 'err',
-          msg: `✗ Erro na Chave Gemini API: ${err.message || 'Verifique se a chave informada é uma chave válida do Google AI Studio (inicia em AIzaSy...)'}`,
+          msg: `✗ Erro na Chave Gemini API: ${err.message || 'Verifique se a chave informada é uma chave válida.'}`,
         });
         return;
       }
     }
 
-    // 2. Server Route Fallback (via Vercel Serverless Function)
+    // 3. SERVER ROUTE FALLBACK (SERVERLESS VERCEL API)
     if (audioFile.size > 4.5 * 1024 * 1024) {
       setIsTranscribing(false);
       setTranscribeNote({
         type: 'err',
-        msg: `⚠ O arquivo de áudio (${(audioFile.size / (1024 * 1024)).toFixed(1)}MB) excede o limite da Vercel (4.5MB). Cole sua Chave Gemini no campo acima para transcrever diretamente no navegador sem limites!`,
+        msg: `⚠ O arquivo de áudio (${(audioFile.size / (1024 * 1024)).toFixed(1)}MB) excede o limite da Vercel (4.5MB). Cole sua Chave Groq (gsk_...) ou Gemini API no campo acima para processar diretamente no navegador sem limites!`,
       });
       return;
     }
@@ -327,7 +425,9 @@ Retorne estritamente um array JSON com a estrutura:
     try {
       const formData = new FormData();
       formData.append('audio', audioFile);
+      if (groqApiKey) formData.append('groqApiKey', groqApiKey);
       if (apiKey) formData.append('apiKey', apiKey);
+      if (audioDuration) formData.append('audioDuration', String(audioDuration));
 
       const res = await fetch('/api/transcribe', {
         method: 'POST',
@@ -342,9 +442,9 @@ Retorne estritamente um array JSON com a estrutura:
           errorMsg = parsed.error || errorMsg;
         } catch {
           if (res.status === 504) {
-            errorMsg = 'O tempo de resposta excedeu o limite de 10s da Vercel. Informe sua Chave Gemini API no campo acima para transcrever áudios longos diretamente no seu navegador sem limitações!';
+            errorMsg = 'O tempo de resposta excedeu 10s. Informe sua Chave Groq API no campo acima para transcrever em 2 segundos sem limitações!';
           } else if (res.status === 413) {
-            errorMsg = 'O arquivo de áudio excede o limite da Vercel (4.5MB). Cole sua Chave Gemini no campo acima para processar diretamente no navegador.';
+            errorMsg = 'O arquivo de áudio excede o limite da Vercel (4.5MB). Cole sua Chave API no campo acima para processar diretamente no navegador.';
           } else {
             errorMsg = `Erro no servidor (${res.status}): ${rawText.slice(0, 150)}`;
           }
@@ -363,7 +463,7 @@ Retorne estritamente um array JSON com a estrutura:
         setPasteText(data.paste);
         setTranscribeNote({
           type: 'ok',
-          msg: `✓ ${data.count} segmentos transcritos com sucesso!`,
+          msg: `✓ ${data.count} segmentos transcritos com sucesso (${data.provider || 'API'})!`,
         });
       } else {
         setTranscribeNote({
@@ -724,7 +824,37 @@ ${srtText}`;
               1
             </div>
             <div className="text-xs font-extrabold tracking-wider uppercase text-text">
-              Áudio & Chave Gemini API
+              Áudio & Chaves de API (Groq Whisper / Gemini)
+            </div>
+          </div>
+
+          {/* Groq API Key Input (Preferred for Whisper on Vercel) */}
+          <div className="mb-3">
+            <label className="text-[11px] text-text-muted flex items-center justify-between mb-1 font-semibold">
+              <span className="flex items-center gap-1.5">
+                <Key className="w-3.5 h-3.5 text-green" /> Chave Groq API (Whisper 100% Preciso):
+              </span>
+              <span className="text-[10px] text-green font-normal">
+                {groqApiKey ? '✓ Salva no navegador' : '⚡ 100% Grátis & Ultra-Rápido'}
+              </span>
+            </label>
+            <input
+              type="password"
+              value={groqApiKey}
+              onChange={(e) => handleSaveGroqKey(e.target.value)}
+              placeholder="Cole sua gsk_... (Obtenha grátis em console.groq.com)"
+              className="w-full px-3 py-2 text-xs font-mono bg-surface-el border border-border-strong rounded-lg text-text focus:outline-none focus:border-green"
+            />
+            <div className="text-[10px] text-text-muted/80 mt-1 flex justify-between">
+              <span>🚀 Transcreve áudios em 2 segundos com timestamps exatos no tempo real!</span>
+              <a
+                href="https://console.groq.com/keys"
+                target="_blank"
+                rel="noreferrer"
+                className="text-cyan underline hover:text-white"
+              >
+                Criar chave grátis no Groq ↗
+              </a>
             </div>
           </div>
 
@@ -734,20 +864,17 @@ ${srtText}`;
               <span className="flex items-center gap-1.5">
                 <Key className="w-3.5 h-3.5 text-amber" /> Chave Gemini API (Google Gemini Pro):
               </span>
-              <span className="text-[10px] text-green font-normal">
-                {apiKey ? '✓ Salva no navegador' : '⚡ Recomendado para áudios longos'}
+              <span className="text-[10px] text-text-muted font-normal">
+                {apiKey ? '✓ Salva' : 'Opcional (Fallback)'}
               </span>
             </label>
             <input
               type="password"
               value={apiKey}
               onChange={(e) => handleSaveKey(e.target.value)}
-              placeholder="Cole sua AI_KEY_... (ou defina no ambiente)"
+              placeholder="Cole sua AIzaSy... (ou defina no ambiente)"
               className="w-full px-3 py-2 text-xs font-mono bg-surface-el border border-border-strong rounded-lg text-text focus:outline-none focus:border-accent"
             />
-            <div className="text-[10px] text-text-muted/70 mt-1">
-              💡 Cole sua chave 1 vez. Ela fica salva no seu navegador para transcrever áudios longos sem limite de tempo!
-            </div>
           </div>
 
           <div className="flex items-center gap-3 flex-wrap">
@@ -775,11 +902,15 @@ ${srtText}`;
               {isTranscribing ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Transcrevendo com Gemini Pro...</span>
+                  <span>Transcrevendo áudio...</span>
                 </>
               ) : (
                 <>
-                  <span>▶ Transcrever com Gemini Pro</span>
+                  <span>
+                    {groqApiKey || apiKey.startsWith('gsk_')
+                      ? '⚡ Transcrever com Groq Whisper (Ultra-Rápido)'
+                      : '▶ Transcrever Áudio'}
+                  </span>
                 </>
               )}
             </button>
