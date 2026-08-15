@@ -498,6 +498,7 @@ dialog input{ width:100%; margin:10px 0; padding:9px 11px; background:var(--surf
     <div class="row" style="margin-top:8px">
       <button class="btn btn-green" id="btnCopy" onclick="copyPaste()">📋 Copiar Prompt + SRT</button>
       <button class="btn btn-ghost" onclick="downloadTxt()">↓ Salvar .txt</button>
+      <button class="btn btn-ghost" style="color:var(--cyan);border-color:rgba(0,187,255,.3)" onclick="downloadSrt()">🎬 Salvar Legenda (.srt)</button>
       <button class="btn btn-orange" style="margin-left:auto" onclick="openApi()">✨ Gerar via API (pago)</button>
     </div>
     <div class="hint">💡 Grátis: clique "Copiar Prompt + SRT", cole no Claude/ChatGPT, copie os prompts e gere as imagens no LCTNET FLOW.</div>
@@ -609,6 +610,33 @@ function downloadTxt(){
   const blob = new Blob([pasteText], {type:'text/plain;charset=utf-8'});
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
   a.download = 'prompt_e_transcricao.txt'; a.click();
+}
+function fmtSrtTime(s){
+  let h=Math.floor(s/3600), m=Math.floor((s%3600)/60), sec=Math.floor(s%60), ms=Math.floor((s%1)*1000);
+  return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(sec).padStart(2,'0')+','+String(ms).padStart(3,'0');
+}
+function downloadSrt(){
+  let lines = $('srt').value.split('\n');
+  let segs = [];
+  let pat = /\[(\d{1,2}):(\d{2})\]\s*(.*)/;
+  lines.forEach(l=>{
+    let m = pat.exec(l);
+    if(m){
+      let ts = parseInt(m[1])*60 + parseInt(m[2]);
+      if(m[3].trim()) segs.push({start: ts, text: m[3].trim()});
+    }
+  });
+  if(!segs.length) return;
+  let out = segs.map((s, i)=>{
+    let start = fmtSrtTime(s.start);
+    let next = (i < segs.length - 1) ? segs[i+1].start : s.start + 4;
+    if(next <= s.start) next = s.start + 3;
+    let end = fmtSrtTime(next);
+    return (i+1)+'\n'+start+' --> '+end+'\n'+s.text+'\n';
+  }).join('\n');
+  let blob = new Blob([out], {type:'text/plain;charset=utf-8'});
+  let a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = 'legenda_capcut.srt'; a.click();
 }
 const apiDlg = $('apiDlg');
 function openApi(){ apiDlg.showModal(); }

@@ -496,6 +496,45 @@ Retorne estritamente um array JSON com a estrutura:
     a.click();
   };
 
+  const formatSrtTime = (totalSecs: number): string => {
+    const hrs = Math.floor(totalSecs / 3600);
+    const mins = Math.floor((totalSecs % 3600) / 60);
+    const secs = Math.floor(totalSecs % 60);
+    const millis = Math.floor((totalSecs % 1) * 1000);
+    const hh = String(hrs).padStart(2, '0');
+    const mm = String(mins).padStart(2, '0');
+    const ss = String(secs).padStart(2, '0');
+    const mmm = String(millis).padStart(3, '0');
+    return `${hh}:${mm}:${ss},${mmm}`;
+  };
+
+  const handleDownloadSrt = () => {
+    const currentSegments = segments.length ? segments : parseSrtTextToSegments(srtText);
+    if (!currentSegments.length) return;
+
+    const srtContent = currentSegments
+      .map((seg, idx) => {
+        const startTime = formatSrtTime(seg.start);
+        let nextStart = idx < currentSegments.length - 1 ? currentSegments[idx + 1].start : seg.start + 4;
+        if (audioDuration && idx === currentSegments.length - 1 && audioDuration > seg.start) {
+          nextStart = audioDuration;
+        }
+        if (nextStart <= seg.start) {
+          nextStart = seg.start + 3;
+        }
+        const endTime = formatSrtTime(nextStart);
+        return `${idx + 1}\n${startTime} --> ${endTime}\n${seg.text}\n`;
+      })
+      .join('\n');
+
+    const blob = new Blob([srtContent], { type: 'text/plain;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    const rawName = audioFile?.name || restoredAudioName || 'legenda';
+    a.download = `${rawName.replace(/\.[^/.]+$/, '')}.srt`;
+    a.click();
+  };
+
   const [isMusicCopied, setIsMusicCopied] = useState<boolean>(false);
   const [isAllPromptsCopied, setIsAllPromptsCopied] = useState<boolean>(false);
 
@@ -996,6 +1035,16 @@ ${srtText}`;
             >
               <Download className="w-4 h-4" />
               <span>↓ Salvar .txt</span>
+            </button>
+
+            <button
+              onClick={handleDownloadSrt}
+              disabled={!srtText}
+              title="Baixar arquivo de legenda padrão SubRip (.srt) para importar no CapCut, Premiere, etc."
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg font-bold text-xs bg-cyan/15 border border-cyan/40 text-cyan hover:-translate-y-0.5 transition-all disabled:opacity-30"
+            >
+              <Film className="w-4 h-4 text-cyan" />
+              <span>🎬 Salvar Legenda (.srt)</span>
             </button>
 
             <button
